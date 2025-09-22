@@ -43,11 +43,14 @@ def gauge_chart(value, title):
     fig.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
     return fig
 
+def clean_text(text):
+    return text.encode("latin-1", "ignore").decode("latin-1")
+
 def export_pdf(kpi_df, readiness_score):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Baseline Data Strategy – Investor Readiness Report", ln=True)
+    pdf.cell(0, 10, clean_text("Baseline Data Strategy – Investor Readiness Report"), ln=True)
     pdf.set_font("Arial", size=12)
     pdf.cell(0, 10, f"Generated on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
     pdf.ln(10)
@@ -56,10 +59,12 @@ def export_pdf(kpi_df, readiness_score):
     pdf.cell(0, 10, "KPI Alignment Status:", ln=True)
     pdf.ln(10)
     for _, row in kpi_df.iterrows():
-        pdf.cell(0, 8, f"{row['KPI']} – {row['Status']} – Owner: {row['Owner']}", ln=True)
+        line = f"{row['KPI']} – {row['Status']} – Owner: {row['Owner'] or 'Unassigned'}"
+        pdf.cell(0, 8, clean_text(line), ln=True)
     filename = "data_strategy_report.pdf"
     pdf.output(filename)
     return filename
+
 
 # -------------------------
 # Streamlit App
