@@ -1,61 +1,69 @@
+# file: baseline_data_strategy_app.py
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="OB-GYN Clinic Dashboard", layout="wide")
+# -------------------------
+# Mock Data (replace with Firebase, Sheets, or Snowflake later)
+# -------------------------
+kpis = {
+    "ARR": {"defined": True, "owner": "CFO"},
+    "CAC": {"defined": True, "owner": "CMO"},
+    "Churn": {"defined": False, "owner": None},
+    "LTV": {"defined": True, "owner": "CFO"},
+    "Gross Margin": {"defined": False, "owner": None},
+}
 
-st.title("👩‍⚕️ OB-GYN Clinic Analytics Dashboard")
+data_health = {
+    "Finance": 0.92,
+    "Sales": 0.78,
+    "Product": 0.85,
+    "Ops": 0.67,
+}
 
-# Generate sample demo data
-dates = pd.date_range(start="2025-01-01", periods=12, freq='M')
-appointments = np.random.randint(80, 150, size=len(dates))
-cancellations = np.random.randint(5, 20, size=len(dates))
-procedures = np.random.randint(30, 70, size=len(dates))
-revenue = appointments * np.random.randint(50, 120, size=len(dates))
+# -------------------------
+# Streamlit App
+# -------------------------
+st.set_page_config(page_title="Baseline Data Strategy", layout="wide")
 
-# KPIs
+st.title("📊 Baseline Data Strategy Dashboard")
+st.write("An executive view of your data foundation readiness.")
+
+# ---- KPI Definitions Progress ----
+defined_kpis = sum(1 for k in kpis if kpis[k]["defined"])
+total_kpis = len(kpis)
+progress = defined_kpis / total_kpis
+
+st.subheader("1. KPI Definitions")
+st.progress(progress)
+st.write(f"{defined_kpis}/{total_kpis} KPIs defined")
+
+# Show KPI Table
+df_kpis = pd.DataFrame([
+    {"KPI": k, "Defined": "✅" if v["defined"] else "❌", "Owner": v["owner"] or "Unassigned"}
+    for k, v in kpis.items()
+])
+st.table(df_kpis)
+
+# ---- Data Health ----
+st.subheader("2. Data Health Snapshot")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Appointments (YTD)", f"{appointments.sum()}")
-col2.metric("Cancellations (YTD)", f"{cancellations.sum()}")
-col3.metric("Procedures (YTD)", f"{procedures.sum()}")
-col4.metric("Revenue (YTD)", f"${revenue.sum():,}")
+for (domain, score), col in zip(data_health.items(), [col1, col2, col3, col4]):
+    color = "🟢" if score > 0.85 else "🟡" if score > 0.7 else "🔴"
+    col.metric(domain, f"{score*100:.0f}%", color)
 
-st.markdown("---")
+# ---- Ownership ----
+st.subheader("3. Ownership Tracker")
+unassigned = [k for k, v in kpis.items() if not v["owner"]]
+if unassigned:
+    st.warning(f"⚠️ The following KPIs need owners: {', '.join(unassigned)}")
+else:
+    st.success("✅ All KPIs have owners assigned.")
 
-# Trends
-st.subheader("📅 Monthly Trends")
+# ---- Investor Readiness ----
+st.subheader("4. Investor Readiness Meter")
+readiness = round((progress + (sum(data_health.values())/len(data_health)))/2, 2)
+st.metric("Investor Readiness", f"{readiness*100:.0f}%", "Target: 90%+")
 
-fig, ax = plt.subplots(figsize=(10,4))
-ax.plot(dates, appointments, marker='o', label='Appointments')
-ax.plot(dates, cancellations, marker='x', label='Cancellations')
-ax.set_title("Appointments vs Cancellations")
-ax.legend()
-ax.set_xlabel("Month")
-ax.set_ylabel("Count")
-fig.autofmt_xdate()
-st.pyplot(fig)
-
-fig2, ax2 = plt.subplots(figsize=(10,4))
-ax2.bar(dates, revenue, color='purple')
-ax2.set_title("Monthly Revenue")
-ax2.set_xlabel("Month")
-ax2.set_ylabel("Revenue ($)")
-fig2.autofmt_xdate()
-st.pyplot(fig2)
-
-# Procedure breakdown
-st.subheader("🔎 Procedure Breakdown")
-procedure_types = ["Prenatal Care", "Ultrasound", "Delivery", "GYN Surgery"]
-procedure_counts = np.random.randint(20, 80, size=len(procedure_types))
-
-fig3, ax3 = plt.subplots()
-ax3.pie(procedure_counts, labels=procedure_types, autopct='%1.1f%%', startangle=90)
-ax3.set_title("Procedures by Type")
-st.pyplot(fig3)
-
-st.markdown("---")
-
-st.info("This dashboard is deployment-ready. To share with clients, push this file (app.py) to a GitHub repo and connect it to Streamlit Cloud. You'll instantly get a public URL.")
-
-st.caption("Demo dashboard – data is simulated.")
+# ---- Call to Action ----
+st.subheader("Next Step")
+st.info("📅 Schedule a Data Strategy Review to finalize ownership and improve readiness.")
