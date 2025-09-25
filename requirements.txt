@@ -12,3 +12,7 @@ python-dateutil
 pycountry
 reportlab
 Babel
+streamlit==1.36.0
+pandas==2.2.2
+scikit-learn==1.4.2
+numpy==1.26.4
