@@ -22,8 +22,7 @@ WEIGHTS = {
 # Header
 # -----------------------------
 st.title("🏢 Intrinsic Value of Information (IVI) Assessment")
-st.caption("What it is:
-An IVI Assessment is a structured way to measure the trustworthiness of your company’s data — independent of how or where it’s used. It tells you, in plain numbers, how “fit for purpose” your information is.")
+st.caption("What it is: An IVI Assessment is a structured way to measure the trustworthiness of your company’s data — independent of how or where it’s used. It tells you, in plain numbers, how “fit for purpose” your information is.")
 
 col1, col2 = st.columns(2)
 with col1:
