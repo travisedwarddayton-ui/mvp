@@ -95,7 +95,7 @@ def roi_projection(params, months=24, discount_rate=0.12):
 # Layout
 # -----------------------------
 st.title("✈️ Travel Data Federation Hub — CEO Dashboard")
-st.caption("Production-ready, board-focused ROI & strategy dashboard.")
+st.caption("Example dashboard focused on ROI & strategy. Results of data auditing and assessments are plugged into this dashbaord")
 
 tab1, tab2, tab3 = st.tabs(["🏆 CEO Summary", "📈 ROI Details", "🛡️ Governance"])
 
