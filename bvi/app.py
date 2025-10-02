@@ -100,15 +100,31 @@ if portfolio_mode:
     st.subheader("🏢 Portfolio Results Table")
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-    # Bar chart
+    # -----------------------------
+    # Fixed Bar Chart with Peer Benchmark
+    # -----------------------------
     st.subheader("💶 BVI Scores vs Peer Benchmark")
+
     fig = px.bar(df, x="Dataset", y="BVI Score", color="Classification", text="BVI Score")
+
     if "Peer Benchmark" in df.columns:
-        fig.add_scatter(x=df["Dataset"], y=df["Peer Benchmark"], mode="lines+markers", name="Peer Benchmark")
-    fig.update_traces(textposition="outside")
+        fig.add_scatter(
+            x=df["Dataset"],
+            y=df["Peer Benchmark"],
+            mode="lines+markers",
+            name="Peer Benchmark"
+        )
+
+    # Only apply textposition to bar traces
+    for trace in fig.data:
+        if trace.type == "bar":
+            trace.textposition = "outside"
+
     st.plotly_chart(fig, use_container_width=True)
 
-    # Quadrant view (Condition vs Relevance — IVI vs BVI placeholder)
+    # -----------------------------
+    # Quadrant view (Condition vs Relevance)
+    # -----------------------------
     st.subheader("🎯 Portfolio Priority Quadrant")
     df["Condition (IVI)"] = [78, 84, 65, 72]  # placeholder IVI scores for demo
     fig2 = px.scatter(df, x="Condition (IVI)", y="BVI Score", size="BVI Score", color="Classification",
@@ -116,7 +132,9 @@ if portfolio_mode:
     fig2.update_traces(textposition="top center")
     st.plotly_chart(fig2, use_container_width=True)
 
+    # -----------------------------
     # Export
+    # -----------------------------
     st.subheader("⬇️ Export Portfolio Results")
     st.download_button("Download CSV", df.to_csv(index=False).encode("utf-8"), "bvi_portfolio_results.csv", "text/csv")
 
