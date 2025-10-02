@@ -418,9 +418,21 @@ for dim in DIMENSIONS:
         for sub in dim["sub_dimensions"]:
             skey = f"{dim['key']}:{sub['key']}"
             options = [1,2,3,4,5]
-            labels = [f"{i}. {sub['levels'][str(i)]}" for i in options]
-            idx = st.radio(f"**{sub['name']}**", options=list(range(5)), format_func=lambda i: labels[i], key=skey)
-            responses[skey] = options[idx]
+            labels = [f"({i}) {sub['levels'][str(i)]}" for i in options]
+            
+            # Default selection = 0 (Level 1)
+            idx = st.radio(
+                f"**{sub['name']} (Current Score: {responses.get(skey, 0)})**",
+                options=options,
+                format_func=lambda i: labels[i-1],
+                key=skey
+            )
+            
+            responses[skey] = idx
+            
+            # Show feedback bar
+            st.progress(idx/5.0, text=f"Level {idx}/5")
+
 
 # -------------------------------
 # Compute Scores
