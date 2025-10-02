@@ -160,7 +160,7 @@ st.sidebar.title("⚙️ Configure Preview")
 segment = st.sidebar.selectbox("Primary Segment", ["Leisure", "Corporate", "Mixed Portfolio"], index=2)
 region = st.sidebar.selectbox("Region", ["North America","EU/UK","Global"], index=2)
 currency = st.sidebar.selectbox("Currency", ["$","€","£"], index=0)
-cta_url = st.sidebar.text_input("CTA URL (Book a call)", value="https://realtimedata.ai/")
+cta_url = st.sidebar.text_input("CTA URL (Book a call)", value="https://app.lemcal.com/@realtimedatasolutions")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Guarantee")
