@@ -1,4 +1,4 @@
-# Imaging Operations Control Tower – Streamlit MVP (Fixed Date Handling)
+# Imaging Operations Control Tower – Streamlit MVP (Now with Patient Discovery)
 
 import datetime as dt
 import random
@@ -32,12 +32,18 @@ def generate_exam_history(inv_df, days=90):
         for d in range(days):
             date = start + dt.timedelta(days=d)
             for i in range(random.randint(0, 5)):
+                patient_id = f"P{random.randint(1000,9999)}"
+                patient_name = random.choice(["Smith", "Garcia", "Khan", "Ivanova", "Lee"]) + \
+                               ", " + random.choice(["John", "Maria", "Ali", "Anna", "Wei"])
                 recs.append({
                     "exam_id": f"E{m.machine_id}-{date}-{i}",
                     "date": pd.to_datetime(date),
                     "site": m.site,
                     "machine_id": m.machine_id,
                     "modality": m.modality,
+                    "patient_id": patient_id,
+                    "patient_name": patient_name,
+                    "accession": f"ACC{random.randint(10000,99999)}",
                 })
     return pd.DataFrame(recs)
 
@@ -52,7 +58,7 @@ inv_df, exams_df = load_data()
 # ------------------------------------------------------------
 # Sidebar
 # ------------------------------------------------------------
-role = st.sidebar.selectbox("Role", ["Radiology Director", "CFO", "CIO/CTO"])
+role = st.sidebar.selectbox("Role", ["Radiology Director", "CFO", "CIO/CTO", "Compliance Officer"])
 site_filter = st.sidebar.multiselect("Sites", options=SITES, default=SITES)
 modality_filter = st.sidebar.multiselect("Modalities", options=MODALITIES, default=MODALITIES)
 
@@ -61,21 +67,15 @@ raw_date = st.sidebar.date_input(
     "Date range",
     value=(dt.date.today() - dt.timedelta(days=60), dt.date.today()),
 )
-
-# Ensure raw_date is always a tuple of two dates
 if isinstance(raw_date, (list, tuple)) and len(raw_date) == 2:
     start_date, end_date = raw_date
 else:
     start_date = raw_date
     end_date = raw_date
 
-# Convert to pandas Timestamps
 start_date = pd.to_datetime(start_date)
 end_date = pd.to_datetime(end_date)
 
-# ------------------------------------------------------------
-# Data Filter
-# ------------------------------------------------------------
 mask = (
     exams_df["site"].isin(site_filter)
     & exams_df["modality"].isin(modality_filter)
@@ -92,3 +92,35 @@ if not ex.empty:
     st.plotly_chart(px.histogram(ex, x="date", color="modality", title="Exam Volume"), use_container_width=True)
 else:
     st.warning("No data in selected date range.")
+
+# ------------------------------------------------------------
+# Patient Discovery & Compliance Queries (Requirement #21)
+# ------------------------------------------------------------
+st.subheader("Patient Discovery & Compliance Queries")
+with st.expander("Run Patient Discovery Query", expanded=False):
+    pid = st.text_input("Patient ID contains:")
+    pname = st.text_input("Patient Name contains:")
+    acc = st.text_input("Accession Number contains:")
+    date_range = st.date_input(
+        "Exam Date Range",
+        value=(dt.date.today() - dt.timedelta(days=30), dt.date.today()),
+    )
+    if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+        dstart, dend = date_range
+    else:
+        dstart = dend = date_range
+    dstart = pd.to_datetime(dstart)
+    dend = pd.to_datetime(dend)
+
+    query = exams_df.copy()
+    if pid:
+        query = query[query["patient_id"].str.contains(pid, case=False)]
+    if pname:
+        query = query[query["patient_name"].str.contains(pname, case=False)]
+    if acc:
+        query = query[query["accession"].str.contains(acc, case=False)]
+    query = query[(pd.to_datetime(query["date"]) >= dstart) & (pd.to_datetime(query["date"]) <= dend)]
+
+    st.write(f"Matches: {len(query)}")
+    st.dataframe(query.head(200), use_container_width=True, hide_index=True)
+    st.download_button("Download Results (CSV)", query.to_csv(index=False).encode("utf-8"), "patient_discovery.csv", "text/csv")
