@@ -1,5 +1,5 @@
 # app.py
-# Radiology Workflow Accelerator — Hospital-Scale MVP (Enhanced with Cover Page, Executive Summary, Simulation Controls, KPI Dashboard, SLA Tracking, PDF with Charts, Audit Logs & Policies)
+# Radiology Workflow Accelerator — Hospital-Scale MVP (No external PDF libraries for Streamlit Cloud compatibility)
 
 import json
 import random
@@ -7,10 +7,6 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Radiology Workflow Accelerator", page_icon="🩻", layout="wide")
@@ -131,106 +127,6 @@ if not trend_df.empty:
         mime="text/csv",
     )
 
-    # PDF Report Export with Cover Page, Trends, Audit Logs & Policies
-    def generate_pdf():
-        file_path = "/tmp/kpi_report.pdf"
-        doc = SimpleDocTemplate(file_path, pagesize=letter)
-        styles = getSampleStyleSheet()
-        elements = []
-
-        # Cover page with title and summary
-        elements.append(Paragraph("🏥 Radiology Workflow Accelerator", styles['Title']))
-        elements.append(Spacer(1, 24))
-        elements.append(Paragraph("Executive KPI & Compliance Report", styles['Heading2']))
-        elements.append(Spacer(1, 12))
-        elements.append(Paragraph("This report provides a hospital-wide overview of radiology workflow performance, errors, SLA breaches, compliance posture, and retention policies.", styles['Normal']))
-        elements.append(Spacer(1, 24))
-        elements.append(Paragraph("Prepared for Hospital Leadership", styles['Italic']))
-        elements.append(PageBreak())
-
-        elements.append(Paragraph("Radiology Workflow Accelerator — Executive KPI Report", styles['Title']))
-        elements.append(Spacer(1, 12))
-
-        # KPI summary table
-        data = [["Metric", "Value"],
-                ["Total Studies", len(studies)],
-                ["Archived", (studies["Status"]=="Archived").sum()],
-                ["Delivered", (studies["Status"]=="Delivered").sum()],
-                ["Errors", (studies.get("Error").notna().sum() if "Error" in studies.columns else 0)],
-                ["AI Running", (studies["AIStatus"]=="Running").sum()],
-                ["SLA Breaches", sla_breaches]]
-
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,0),colors.grey),
-            ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
-            ('ALIGN',(0,0),(-1,-1),'CENTER'),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0,0), (-1,0), 12),
-            ('BACKGROUND',(0,1),(-1,-1),colors.beige),
-            ('GRID', (0,0), (-1,-1), 1, colors.black),
-        ]))
-        elements.append(table)
-
-        elements.append(Spacer(1, 12))
-
-        # Add trend chart image
-        plt.figure()
-        plt.plot(trend_df["ts"], trend_df["Errors"], label="Errors")
-        plt.plot(trend_df["ts"], trend_df["SLA_Breaches"], label="SLA Breaches")
-        plt.xticks(rotation=45, ha="right")
-        plt.legend()
-        chart_path = "/tmp/trends.png"
-        plt.savefig(chart_path, bbox_inches="tight")
-        elements.append(Image(chart_path, width=400, height=200))
-        elements.append(Spacer(1, 12))
-
-        # Add audit logs if exist
-        if "audit" in st.session_state and st.session_state.audit:
-            elements.append(Paragraph("Compliance Audit Logs (Last 10)", styles['Heading2']))
-            audit_data = [["Timestamp", "Event"]] + [[a["ts"], a["event"]] for a in st.session_state.audit[-10:]]
-            audit_table = Table(audit_data)
-            audit_table.setStyle(TableStyle([
-                ('BACKGROUND',(0,0),(-1,0),colors.grey),
-                ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
-                ('ALIGN',(0,0),(-1,-1),'CENTER'),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('GRID', (0,0), (-1,-1), 1, colors.black),
-            ]))
-            elements.append(audit_table)
-
-        # Add policy evidence table
-        elements.append(Spacer(1, 12))
-        elements.append(Paragraph("Policy Evidence", styles['Heading2']))
-        policy_data = [["Modality", "Retention (days)", "Tier", "Encrypt", "Export"]]
-        for modality, pol in DEFAULT_POLICIES.items():
-            policy_data.append([modality, pol["retention"], pol["tier"], str(pol["encrypt"]), str(pol["export"])] )
-        policy_table = Table(policy_data)
-        policy_table.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,0),colors.grey),
-            ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
-            ('ALIGN',(0,0),(-1,-1),'CENTER'),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('GRID', (0,0), (-1,-1), 1, colors.black),
-        ]))
-        elements.append(policy_table)
-
-        elements.append(Spacer(1, 12))
-        elements.append(Paragraph("Generated on: "+datetime.now().strftime("%Y-%m-%d %H:%M:%S"), styles['Normal']))
-
-        doc.build(elements)
-        return file_path
-
-    if st.button("⬇️ Download KPI Report as PDF"):
-        pdf_path = generate_pdf()
-        with open(pdf_path, "rb") as f:
-            st.download_button(
-                label="Save PDF Report",
-                data=f,
-                file_name="kpi_report.pdf",
-                mime="application/pdf",
-            )
-
 # -----------------------------
 # Radiologist View
 # -----------------------------
@@ -313,4 +209,4 @@ else:
 # Footer
 # -----------------------------
 st.markdown("---")
-st.caption("Simulated hospital workflow: KPIs on top (with SLA breach count & trends, exportable to CSV & PDF with cover page, charts, audit logs, and policies), radiologists see prioritized worklists with SLA highlighting, IT monitors pipelines, compliance reviews retention and audit logs. Use sidebar controls to advance workflow or inject errors.")
+st.caption("Simulated hospital workflow: KPIs on top (with SLA breach count & trends, exportable to CSV), radiologists see prioritized worklists with SLA highlighting, IT monitors pipelines, compliance reviews retention and audit logs. Use sidebar controls to advance workflow or inject errors.")
