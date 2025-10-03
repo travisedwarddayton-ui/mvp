@@ -284,6 +284,29 @@ util_by_machine["utilization_flag"] = np.where(util_by_machine["scans"] <= thr_l
 st.dataframe(util_by_machine.sort_values("scans", ascending=False), use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------
+# 5b) NEW: Workflow Bottleneck Identification (Requirement #16)
+#   Visualize average time spent in each stage (prep → wait → scan) by modality/site and flag bottlenecks.
+# ------------------------------------------------------------
+st.subheader("Workflow Bottlenecks")
+st.caption("Identifies stages with the highest average duration to target process improvements.")
+stage = ex.groupby(["site", "modality"]).agg(
+    prep_min=("prep_min", "mean"),
+    wait_min=("wait_min", "mean"),
+    scan_min=("scan_min", "mean"),
+    scans=("exam_id", "count")
+).reset_index()
+# Bottleneck = argmax of stage mean
+stage["bottleneck_stage"] = stage[["prep_min", "wait_min", "scan_min"]].idxmax(axis=1)
+
+# Sankey-style stacked bars to compare stage composition
+stage_melt = stage.melt(id_vars=["site", "modality", "scans", "bottleneck_stage"], value_vars=["prep_min", "wait_min", "scan_min"], var_name="stage", value_name="minutes")
+st.plotly_chart(px.bar(stage_melt, x="modality", y="minutes", color="stage", facet_col="site", title="Avg Minutes by Stage (Prep/Wait/Scan) – Bottlenecks"), use_container_width=True)
+
+# Table highlighting where to act first
+stage["priority"] = (stage["minutes_total"] if "minutes_total" in stage else (stage["prep_min"]+stage["wait_min"]+stage["scan_min"])) * (stage["scans"] / stage["scans"].max().clip(lower=1))
+st.dataframe(stage.sort_values(["priority"], ascending=False)[["site","modality","scans","prep_min","wait_min","scan_min","bottleneck_stage"]], use_container_width=True, hide_index=True)
+
+# ------------------------------------------------------------
 # 6) Compliance, Dose & Quality (repeat/rejects)
 #    Covers: 11, 12
 # ------------------------------------------------------------
@@ -420,6 +443,8 @@ NORMALIZE = {
 with st.expander("EHR (Outcomes Linkage)"):
     st.markdown("Map imaging encounters to problem lists, diagnoses, and outcomes for quality and value tracking.")
     st.checkbox("Enable outcomes linkage (read-only)", value=False)
+    st.text_input("EHR FHIR Token/Secret (stored in secrets)", value="", type="password")
+    st.button("Validate FHIR Connection")
 
 # ------------------------------------------------------------
 # 12) Reporting & Exports (Compliance, Ops, Finance)
