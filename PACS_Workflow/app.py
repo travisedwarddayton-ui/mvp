@@ -1,16 +1,9 @@
 # app.py
-# Radiology Workflow Accelerator — Full MVP Application
+# Radiology Workflow Accelerator — Full MVP Application (Fixed)
 # -------------------------------------------------
 # Purpose: End-to-end MVP to demo a vendor-neutral workflow system for radiology data.
-# Features:
-# - Ingest simulated studies.
-# - Normalize metadata.
-# - Route to storage tiers.
-# - Process (convert/export).
-# - Deliver to radiologist queue.
-# - Archive & compliance view.
-# - Failure/retry handling.
-# - Persona-based dashboards (Radiologist, IT, Compliance).
+#
+# Fix: Ensure the 'Error' field always exists and is accessed safely to avoid KeyError.
 
 import streamlit as st
 import pandas as pd
@@ -44,6 +37,10 @@ def generate_studies(n=30):
 
 if "studies" not in st.session_state:
     st.session_state.studies = generate_studies()
+else:
+    # Ensure Error column exists after reloads/updates
+    if "Error" not in st.session_state.studies.columns:
+        st.session_state.studies["Error"] = None
 
 # -----------------------------
 # Workflow Transitions
@@ -61,7 +58,8 @@ step_logic = {
 # Apply step transition with error handling
 for i, row in st.session_state.studies.iterrows():
     if row["Status"] != "Archived":
-        if row["Error"]:  # Retry chance
+        current_error = row.get("Error", None)
+        if current_error:  # Retry chance if failed earlier
             if random.random() > 0.7:
                 st.session_state.studies.at[i, "Error"] = None
         else:
