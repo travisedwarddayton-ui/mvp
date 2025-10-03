@@ -1,4 +1,4 @@
-# Imaging Operations Control Tower – Streamlit MVP (with Tabs & Patient Demographics)
+# Imaging Operations Control Tower – Streamlit MVP (Safe Merge Fix)
 
 import datetime as dt
 import random
@@ -91,7 +91,7 @@ mask = (
     & (pd.to_datetime(exams_df["date"]) <= end_date)
 )
 ex = exams_df.loc[mask]
-inv = inv_df[inv_df["site"].isin(site_filter) & inv_df["modality"].isin(modality_filter)]
+inv = inv_df[inv_df["site"].isin(site_filter) & inv_df["modality"].isin(modality_filter)].copy()
 
 st.title("Imaging Operations Control Tower")
 
@@ -112,11 +112,25 @@ with main_tab:
 with util_tab:
     st.subheader("Operational Utilization")
     util = ex.groupby(["machine_id", "modality"]).size().reset_index(name="scans")
-    util = util.merge(inv[["machine_id", "site", "uptime_pct", "status"]], on="machine_id", how="left")
+
+    # Safe merge with required columns
+    required_cols = ["machine_id", "site", "uptime_pct", "status"]
+    inv_safe = inv.reindex(columns=required_cols)
+
+    util = util.merge(inv_safe, on="machine_id", how="left")
+
     st.dataframe(util, use_container_width=True, hide_index=True)
+
     if not util.empty:
-        st.plotly_chart(px.bar(util, x="machine_id", y="scans", color="modality", title="Scans per Machine"), use_container_width=True)
-        st.plotly_chart(px.bar(util, x="machine_id", y="uptime_pct", color="status", title="Machine Uptime %"), use_container_width=True)
+        st.plotly_chart(
+            px.bar(util, x="machine_id", y="scans", color="modality", title="Scans per Machine"),
+            use_container_width=True
+        )
+        if "uptime_pct" in util.columns:
+            st.plotly_chart(
+                px.bar(util, x="machine_id", y="uptime_pct", color="status", title="Machine Uptime %"),
+                use_container_width=True
+            )
 
 # Patient Discovery
 with patient_tab:
