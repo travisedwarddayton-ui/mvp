@@ -1,4 +1,4 @@
-# Imaging Operations Control Tower – Streamlit MVP (Safe Merge Fix)
+# Imaging Operations Control Tower – Streamlit MVP (Graceful Fallbacks)
 
 import datetime as dt
 import random
@@ -106,31 +106,32 @@ with main_tab:
     if not ex.empty:
         st.plotly_chart(px.histogram(ex, x="date", color="modality", title="Exam Volume"), use_container_width=True)
     else:
-        st.warning("No data in selected date range.")
+        st.info("No exams found for the selected filters.")
 
 # Operational Utilization / Uptime / Downtime
 with util_tab:
     st.subheader("Operational Utilization")
-    util = ex.groupby(["machine_id", "modality"]).size().reset_index(name="scans")
+    if not ex.empty:
+        util = ex.groupby(["machine_id", "modality"]).size().reset_index(name="scans")
+        required_cols = ["machine_id", "site", "uptime_pct", "status"]
+        inv_safe = inv.reindex(columns=required_cols)
+        util = util.merge(inv_safe, on="machine_id", how="left")
 
-    # Safe merge with required columns
-    required_cols = ["machine_id", "site", "uptime_pct", "status"]
-    inv_safe = inv.reindex(columns=required_cols)
-
-    util = util.merge(inv_safe, on="machine_id", how="left")
-
-    st.dataframe(util, use_container_width=True, hide_index=True)
-
-    if not util.empty:
-        st.plotly_chart(
-            px.bar(util, x="machine_id", y="scans", color="modality", title="Scans per Machine"),
-            use_container_width=True
-        )
-        if "uptime_pct" in util.columns:
+        if not util.empty:
+            st.dataframe(util, use_container_width=True, hide_index=True)
             st.plotly_chart(
-                px.bar(util, x="machine_id", y="uptime_pct", color="status", title="Machine Uptime %"),
+                px.bar(util, x="machine_id", y="scans", color="modality", title="Scans per Machine"),
                 use_container_width=True
             )
+            if "uptime_pct" in util.columns:
+                st.plotly_chart(
+                    px.bar(util, x="machine_id", y="uptime_pct", color="status", title="Machine Uptime %"),
+                    use_container_width=True
+                )
+        else:
+            st.info("No utilization data available.")
+    else:
+        st.info("No exams available for utilization analysis.")
 
 # Patient Discovery
 with patient_tab:
@@ -156,5 +157,10 @@ with patient_tab:
     query = query[(pd.to_datetime(query["date"]) >= dstart) & (pd.to_datetime(query["date"]) <= dend)]
 
     st.write(f"Matches: {len(query)}")
-    st.dataframe(query[["exam_id","date","site","modality","patient_id","patient_first","patient_last","patient_dob","accession"]].head(200), use_container_width=True, hide_index=True)
-    st.download_button("Download Results (CSV)", query.to_csv(index=False).encode("utf-8"), "patient_discovery.csv", "text/csv")
+    cols = ["exam_id","date","site","modality","patient_id","patient_first","patient_last","patient_dob","accession"]
+
+    if not query.empty:
+        st.dataframe(query.reindex(columns=cols).head(200), use_container_width=True, hide_index=True)
+        st.download_button("Download Results (CSV)", query.reindex(columns=cols).to_csv(index=False).encode("utf-8"), "patient_discovery.csv", "text/csv")
+    else:
+        st.info("No patient records found for this query.")
