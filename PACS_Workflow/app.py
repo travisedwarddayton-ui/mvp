@@ -8,7 +8,7 @@ st.set_page_config(page_title="Radiology Workflow Pain Validation", layout="wide
 
 st.title("Radiology Vendor Clouds ↔ Hospital (As-Is)")
 
-# --- Vendor Diagram ---
+# --- Vendor Graph ---
 vendors = [
     "GE Healthcare", "Philips Healthcare", "Agfa HealthCare", "Sectra",
     "Merative (Merge)", "Fujifilm (Synapse)", "Change Healthcare / Optum",
@@ -17,40 +17,45 @@ vendors = [
 ]
 
 cols = 4
-x_spacing, y_spacing = 0.25, 0.18
+x_spacing, y_spacing = 2.5, 1.5
 
-fig, ax = plt.subplots(figsize=(15, 10))
+fig, ax = plt.subplots(figsize=(12, 8))
 
+vendor_positions = []
 for i, v in enumerate(vendors):
     col = i % cols
     row = i // cols
-    x = 0.2 + col * x_spacing
-    y = 1.0 - row * y_spacing
-    cloud = Ellipse((x, y), width=0.22, height=0.10,
+    # center the grid around x=7 instead of starting at 0
+    x = col * x_spacing + 2
+    y = 6 - row * y_spacing
+    vendor_positions.append((x, y))
+    cloud = Ellipse((x, y), width=2.2, height=0.8,
                     facecolor="#cfe8ff", edgecolor="blue", linewidth=1.2)
     ax.add_patch(cloud)
     ax.text(x, y, v, ha="center", va="center", fontsize=9, color="navy", weight="bold")
 
-# Hospital
-hospital_x, hospital_y = 0.5, -0.1
-hospital = Rectangle((hospital_x-0.2, hospital_y-0.05), 0.4, 0.1,
+# Hospital in the middle bottom
+hospital_x, hospital_y = (x_spacing * (cols-1))/2 + 2, -1.0
+hospital = Rectangle((hospital_x-2, hospital_y-0.5), 4, 1,
                      facecolor="#90EE90", edgecolor="black", linewidth=1.5)
 ax.add_patch(hospital)
 ax.text(hospital_x, hospital_y, "Hospital", ha="center", va="center",
-        fontsize=13, weight="bold", color="black")
+        fontsize=12, weight="bold", color="black")
 
-# Bi-directional arrow
-# Add arrows from each vendor to hospital
-for i, v in enumerate(vendors):
-    col = i % cols
-    row = i // cols
-    x = 0.2 + col * x_spacing
-    y = 1.0 - row * y_spacing
-    arrow = FancyArrowPatch((x, y-0.05), (hospital_x, hospital_y+0.05),
+# Arrows from each vendor to hospital
+for (x, y) in vendor_positions:
+    arrow = FancyArrowPatch((x, y-0.5), (hospital_x, hospital_y+0.5),
                             arrowstyle="-|>", mutation_scale=10,
                             linewidth=1, color="gray", alpha=0.6)
     ax.add_patch(arrow)
 
+# Styling
+ax.set_xlim(0, cols * x_spacing + 4)
+ax.set_ylim(-2, 7)
+ax.axis("off")
+ax.set_title("Current State: Hospital Manages 13+ Vendor Connections", fontsize=14, weight="bold")
+
+st.pyplot(fig)
 
 # --- Pain Points Table ---
 st.markdown("## Pain Points in Radiology Workflow")
