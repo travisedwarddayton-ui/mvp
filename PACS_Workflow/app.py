@@ -57,54 +57,54 @@ ax.set_title("Current State: Hospital Manages 13+ Vendor Connections", fontsize=
 
 st.pyplot(fig)
 
-# --- Pain Points Table with Updated References ---
+# --- Pain Points Table with External Links ---
 st.markdown("## Pain Points in Radiology Workflow")
 
 pain_data = [
     ["Data fragmented across 13+ vendor silos", "High", "Constantly",
      "Frustration, burnout", "Revenue leakage, lost throughput",
      "No unified patient view", "Constant app toggling",
-     "Radiology Imaging Workflow Problem & Requirements: clinicians juggle 200–300 siloed apps, must 'launch multiple applications'【15】"],
+     "[Source](https://www.intelerad.com/en/2024/07/02/reducing-bottlenecks-in-radiology-workflows/)"],
 
     ["No universal interoperability layer", "High", "Constantly",
      "Clinician stress", "High IT integration cost",
      "Limited knowledge transfer", "Manual routing RIS/PACS/EHR",
-     "Imaging Workflow Enhancement in US Hospitals: interoperability gaps, FHIR/TEFCA push【14】"],
+     "[Source](https://www.marketsandmarkets.com/Market-Reports/enterprise-imaging-it-market-259462660.html)"],
 
     ["Radiologists waste time finding priors", "Medium–High", "Constantly",
      "Fatigue, morale loss", "Lost billable reads", 
      "Cognitive overload", "Slower turnaround",
-     "Radiology Imaging Workflow Problem & Requirements: radiologists waste minutes retrieving priors, delays reads【15】"],
+     "[Source](https://axisimagingnews.com/radiology-products/radiology-software/pacs/pacs-per-use)"],
 
     ["Duplicate scans ordered", "High", "Medium",
      "Patient anxiety", "Duplicate scan cost", 
      "Lost insight from scattered priors", "Redundant workflows",
-     "Radiology Imaging Workflow Problem & Requirements: inaccessible priors cause repeat scans【15】"],
+     "[Source](https://radiologybusiness.com/topics/artificial-intelligence/radiology-artificial-intelligence-roi-calculator-demonstrates-substantial-benefits-5-year-mark)"],
 
     ["Compliance gaps (HIPAA/GDPR)", "High", "Constantly",
      "Breach anxiety", "Avg breach ~$10.93M",
      "Policy uncertainty", "No centralized audit",
-     "Imaging Workflow Enhancement in US Hospitals: legacy PACS lack encryption; IBM 2024 breach avg $10.93M【14】"],
+     "[Source](https://www.ibm.com/reports/data-breach)"],
 
     ["Inconsistent analytics & AI integration", "Medium", "Constantly",
      "Clinician disappointment", "Missed ROI, failed AI pilots",
      "No enterprise-wide learning", "Manual patchwork",
-     "Radiology Imaging Workflow Problem & Requirements: legacy viewers can’t integrate AI; need plug-and-play analytics【15】"],
+     "[Source](https://radiologybusiness.com/topics/artificial-intelligence/radiology-artificial-intelligence-roi-calculator-demonstrates-substantial-benefits-5-year-mark)"],
 
     ["High IT maintenance burden", "Medium–High", "Medium",
      "IT staff burnout", "~$300K/yr downtime",
      "Knowledge loss", "Vendor upgrades break workflows",
-     "Imaging Workflow Enhancement in US Hospitals: 200-bed hospital loses ~$300K annually from imaging downtime【14】"],
+     "[Source](https://www.glassbeam.com/how-disruption-costs-impact-imaging-departments/)"],
 
     ["Vendor lock-in", "High", "Medium",
      "Feeling trapped", "High switching costs",
      "Loss of data control", "Inflexible workflows",
-     "Imaging Workflow Enhancement in US Hospitals: vendor-specific viewers, costly long-term contracts; VNA renegotiation【14】"],
+     "[Source](https://dondennison.com/2016/05/09/vna-and-enterprise-viewer-projects-roi/)"],
 
     ["Delays in diagnosis & care", "High", "Constantly",
      "Patient stress, worse outcomes", "Longer LOS, higher costs",
      "Incomplete priors = errors", "Every workflow slowed",
-     "Radiology Imaging Workflow Problem & Requirements: toggling among PACS/RIS/EHR slows diagnosis【15】"]
+     "[Source](https://axisimagingnews.com/radiology-products/radiology-software/pacs/pacs-per-use)"]
 ]
 
 df = pd.DataFrame(pain_data, columns=[
@@ -112,6 +112,7 @@ df = pd.DataFrame(pain_data, columns=[
     "Financial Pain", "Knowledge Pain", "Process Pain", "Reference"
 ])
 
+# Render as markdown-enabled table
 st.dataframe(df, use_container_width=True)
 
 # --- Validation Section ---
