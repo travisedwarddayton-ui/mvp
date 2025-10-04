@@ -1,7 +1,14 @@
+# radiology_pain_app.py
+import streamlit as st
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch
 
-# Vendors
+st.set_page_config(page_title="Radiology Workflow Pain Validation", layout="wide")
+
+st.title("Radiology Vendor Clouds ↔ Hospital (As-Is)")
+
+# --- Vendor Graph ---
 vendors = [
     "GE Healthcare", "Philips Healthcare", "Agfa HealthCare", "Sectra",
     "Merative (Merge)", "Fujifilm (Synapse)", "Change Healthcare / Optum",
@@ -20,13 +27,13 @@ for i, v in enumerate(vendors):
     x = col * x_spacing + 2
     y = 6 - row * y_spacing
     vendor_positions.append((x, y))
-    
+
     cloud = Ellipse((x, y), width=2.5, height=1.0,
                     facecolor="#d9ecff", edgecolor="#004080", linewidth=1.8)
     ax.add_patch(cloud)
     ax.text(x, y, v, ha="center", va="center", fontsize=10, color="#00264d", weight="bold")
 
-# Hospital
+# Hospital in the middle bottom
 hospital_x, hospital_y = (x_spacing * (cols-1))/2 + 2, -1.0
 hospital = Rectangle((hospital_x-2.5, hospital_y-0.8), 5, 1.6,
                      facecolor="#90EE90", edgecolor="black", linewidth=2.0)
@@ -34,7 +41,7 @@ ax.add_patch(hospital)
 ax.text(hospital_x, hospital_y, "Hospital", ha="center", va="center",
         fontsize=14, weight="bold", color="black")
 
-# Arrows
+# Arrows from each vendor to hospital
 for (x, y) in vendor_positions:
     arrow = FancyArrowPatch((x, y-0.6), (hospital_x, hospital_y+0.8),
                             arrowstyle="->", mutation_scale=14,
@@ -49,8 +56,7 @@ ax.axis("off")
 ax.set_facecolor("white")
 ax.set_title("As-Is: Hospital Manages 13+ Vendor Connections", fontsize=16, weight="bold", pad=20)
 
-plt.show()
-
+st.pyplot(fig)
 
 # --- Pain Points Table with External Links ---
 st.markdown("## Pain Points in Radiology Workflow")
@@ -107,7 +113,6 @@ df = pd.DataFrame(pain_data, columns=[
     "Financial Pain", "Knowledge Pain", "Process Pain", "Reference"
 ])
 
-# Render as markdown-enabled table
 st.dataframe(df, use_container_width=True)
 
 # --- Validation Section ---
