@@ -1,13 +1,13 @@
-# app_current_state_spread_v3.py
+# app_current_state_spread_v4.py
 import streamlit as st
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle
 import matplotlib.lines as mlines
 
-st.set_page_config(page_title="Radiology Current State — Spread Layout v3", layout="wide")
+st.set_page_config(page_title="Radiology Current State — Spread Layout v4", layout="wide")
 
 st.title("Current State: Radiology Data Fragmented Across Vendor Clouds")
-st.caption("Vendors are grouped by category, but each connects separately to the hospital, causing integration chaos.")
+st.caption("Grouped by category, but each connects separately to the hospital, causing integration chaos.")
 
 vendors = {
     "PACS / Modality Clouds": [
@@ -31,11 +31,11 @@ vendors = {
     ],
 }
 
-fig, ax = plt.subplots(figsize=(15, 16))  # taller canvas
+fig, ax = plt.subplots(figsize=(15, 18))  # much taller canvas
 
 x_positions = [0.2, 0.55, 0.9]
 y_start = 1.0
-y_spacing = 0.20  # more spacing
+y_spacing = 0.22  # more spacing
 
 for col, (cat, vendor_list) in enumerate(vendors.items()):
     for row, (vendor, tag) in enumerate(vendor_list):
@@ -58,19 +58,19 @@ for col, (cat, vendor_list) in enumerate(vendors.items()):
         ax.text(x, y - 0.08, tag, ha="center", va="top", fontsize=8, color="#8B0000", style="italic")
 
         # Connect to hospital
-        ax.add_line(mlines.Line2D([x, 0.55], [y-0.06, -0.15], color="gray", linestyle="--", linewidth=1))
+        ax.add_line(mlines.Line2D([x, 0.55], [y-0.06, -0.25], color="gray", linestyle="--", linewidth=1))
 
     # Category header
     ax.text(x, 1.12, cat, ha="center", va="bottom", fontsize=12, weight="bold")
 
-# Hospital (lowered further down)
-hospital = Rectangle((0.4, -0.20), 0.3, 0.1,
+# Hospital (lowered further)
+hospital = Rectangle((0.4, -0.30), 0.3, 0.1,
                      facecolor="#90EE90", edgecolor="black", linewidth=1.5)
 ax.add_patch(hospital)
-ax.text(0.55, -0.15, "Hospital", ha="center", va="center", fontsize=13, weight="bold")
+ax.text(0.55, -0.25, "Hospital", ha="center", va="center", fontsize=13, weight="bold")
 
 ax.set_xlim(0, 1.1)
-ax.set_ylim(-0.3, 1.15)  # more bottom space
+ax.set_ylim(-0.35, 1.2)  # extended bottom space
 ax.axis("off")
 
 st.pyplot(fig)
@@ -78,6 +78,6 @@ st.pyplot(fig)
 st.markdown("""
 ### Pain Points
 - Hospital must manage **13+ vendor connections**.  
-- Priors are scattered across **modality- and vendor-specific silos**.  
-- Radiologists waste time, IT integrations remain brittle, and compliance is harder.  
+- Priors are scattered across **vendor- and modality-specific silos**.  
+- Radiologists waste time and IT integrations are fragile.  
 """)
