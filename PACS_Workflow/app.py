@@ -1,58 +1,62 @@
-# app_current_state_full.py
+# app_current_state_modalities.py
 import streamlit as st
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle
 import matplotlib.lines as mlines
 
-st.set_page_config(page_title="Radiology Data Pain - Current State (All Vendors)", layout="wide")
+st.set_page_config(page_title="Radiology Data Pain - Current State (Vendors + Modalities)", layout="wide")
 
-st.title("Current State: Radiology Data Scattered Across Many Vendor Clouds")
+st.title("Current State: Radiology Data Scattered Across Vendor Clouds and Modalities")
 
-# Full vendor list
-vendors = [
-    "GE Healthcare",
-    "Philips Healthcare",
-    "Agfa HealthCare",
-    "Sectra",
-    "Merative (Merge)",
-    "Fujifilm (Synapse)",
-    "Change Healthcare / Optum",
-    "Hyland Healthcare",
-    "Intelerad",
-    "Ambra Health",
-    "Life Image",
-    "Infinitt Healthcare",
-    "Novarad"
+# Vendors with example modality focus (for storytelling)
+vendors_modalities = [
+    ("GE Healthcare", "CT / Cardiac"),
+    ("Philips Healthcare", "MRI / Neuro"),
+    ("Agfa HealthCare", "X-Ray / General"),
+    ("Sectra", "Orthopedic / MSK"),
+    ("Merative (Merge)", "Mammography / Oncology"),
+    ("Fujifilm (Synapse)", "Ultrasound"),
+    ("Change Healthcare / Optum", "PET / Oncology"),
+    ("Hyland Healthcare", "Enterprise Archive"),
+    ("Intelerad", "Cloud PACS / Mixed"),
+    ("Ambra Health", "Image Sharing"),
+    ("Life Image", "Interoperability"),
+    ("Infinitt Healthcare", "Regional PACS"),
+    ("Novarad", "Community / Small Clinics"),
 ]
 
-# Arrange clouds in a grid
+# Grid layout
 cols = 4
 positions = []
-for i, v in enumerate(vendors):
+for i, (vendor, modality) in enumerate(vendors_modalities):
     x = (i % cols) * 0.35
     y = 1 - (i // cols) * 0.25
     positions.append((x, y))
 
-fig, ax = plt.subplots(figsize=(14, 10))
+fig, ax = plt.subplots(figsize=(15, 10))
 
-# Draw clouds with archives
-for (x, y), name in zip(positions, vendors):
+# Draw clouds with archives and modality labels
+for (x, y), (vendor, modality) in zip(positions, vendors_modalities):
+    # Cloud
     cloud = Ellipse((x, y), width=0.3, height=0.15, facecolor="#cce5ff", edgecolor="blue", alpha=0.7)
     ax.add_patch(cloud)
-    ax.text(x, y+0.1, name, ha="center", va="bottom", fontsize=9, color="blue", weight="bold")
+    ax.text(x, y+0.1, vendor, ha="center", va="bottom", fontsize=9, color="blue", weight="bold")
 
-    # Archive inside each cloud
-    archive = Rectangle((x-0.06, y-0.03), 0.12, 0.06, facecolor="#FFD700", edgecolor="black")
+    # Archive inside cloud
+    archive = Rectangle((x-0.06, y-0.025), 0.12, 0.05, facecolor="#FFD700", edgecolor="black")
     ax.add_patch(archive)
     ax.text(x, y, "Archive", ha="center", va="center", fontsize=8, color="black")
 
-# Draw central hospital
+    # Modality text under archive
+    ax.text(x, y-0.07, modality, ha="center", va="top", fontsize=8, color="darkred", style="italic")
+
+# Draw hospital at bottom
 hospital_x, hospital_y = 0.5, -0.1
 hospital = Rectangle((hospital_x-0.2, hospital_y-0.05), 0.4, 0.1, facecolor="#90EE90", edgecolor="black")
 ax.add_patch(hospital)
 ax.text(hospital_x, hospital_y, "Hospital", ha="center", va="center", fontsize=12, weight="bold", color="black")
 
-# Connect each cloud to hospital
+# Connect clouds to hospital
 for (x, y) in positions:
     line = mlines.Line2D([x, hospital_x], [y-0.1, hospital_y+0.05], color="gray", linestyle="--", linewidth=1.0)
     ax.add_line(line)
@@ -64,10 +68,12 @@ ax.axis("off")
 st.pyplot(fig)
 
 st.markdown("""
-### What This Shows
-- Each **vendor cloud** has its own **archive silo**.  
-- The **hospital** must connect separately to each vendor archive.  
-- Patient studies are scattered across **GE, Philips, Agfa, Sectra, Merative, Fujifilm, Change/Optum, Hyland, Intelerad, Ambra, Life Image, Infinitt, Novarad**.  
-- Radiologists must **know the vendor** to locate priors.  
-- This causes **delays, repeat scans, lost productivity, and compliance risks**.  
+### Data Pain Amplified
+- Each **vendor cloud** also tends to dominate certain **modalities** (CT, MRI, X-ray, Ultrasound, PET, Mammography).  
+- Patient studies are therefore **split both by vendor *and* by modality**.  
+- To find priors, radiologists must **know the vendor** *and* the **modality archive**.  
+- This fragmentation leads to:  
+  - **Lost time** searching multiple systems  
+  - **Duplicate scans** when priors aren’t found  
+  - **Inconsistent analytics & compliance gaps**  
 """)
