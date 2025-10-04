@@ -1,14 +1,14 @@
-# app_pain_matrix.py
+# app_with_validation.py
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch
 
-st.set_page_config(page_title="Radiology Workflow Pain Matrix", layout="wide")
+st.set_page_config(page_title="Radiology Workflow Pain Validation", layout="wide")
 
 st.title("Radiology Vendor Clouds ↔ Hospital (As-Is)")
 
-# Vendor list (grid)
+# --- Vendor Diagram ---
 vendors = [
     "GE Healthcare", "Philips Healthcare", "Agfa HealthCare", "Sectra",
     "Merative (Merge)", "Fujifilm (Synapse)", "Change Healthcare / Optum",
@@ -22,7 +22,6 @@ x_spacing, y_spacing = 0.25, 0.18
 
 fig, ax = plt.subplots(figsize=(15, 10))
 
-# Vendor grid
 for i, v in enumerate(vendors):
     col = i % cols
     row = i // cols
@@ -54,8 +53,8 @@ ax.axis("off")
 
 st.pyplot(fig)
 
-# ---- Pain Matrix Table ----
-st.markdown("## Pain Points in Radiology Workflow (Fact-Checkable)")
+# --- Pain Points Table ---
+st.markdown("## Pain Points in Radiology Workflow")
 
 data = [
     ["Data fragmented across 13+ vendor silos", "High", "Constantly",
@@ -65,20 +64,20 @@ data = [
      "Clinician stress", "High IT integration cost",
      "Limited knowledge transfer", "Manual routing between RIS/PACS/EHR", ":contentReference[oaicite:1]{index=1}:contentReference[oaicite:2]{index=2}"],
     ["Radiologists waste time finding priors", "Medium–High", "Constantly",
-     "Fatigue, morale loss", "Lost billable reads (minutes per case)",
+     "Fatigue, morale loss", "Lost billable reads", 
      "Cognitive overload", "Slower turnaround, missed SLAs", ":contentReference[oaicite:3]{index=3}"],
     ["Duplicate scans ordered", "High", "Medium",
-     "Patient anxiety", "Duplicate scan cost, wasted scanner hours",
+     "Patient anxiety", "Duplicate scan cost", 
      "Lost insight from scattered priors", "Redundant workflows", ":contentReference[oaicite:4]{index=4}"],
     ["Compliance gaps (HIPAA/GDPR)", "High", "Constantly",
-     "Anxiety of breach liability", "Avg breach ~$10.93M",
+     "Breach anxiety", "Avg breach ~$10.93M",
      "Policy uncertainty", "No centralized audit", ":contentReference[oaicite:5]{index=5}"],
     ["Inconsistent analytics & AI integration", "Medium", "Constantly",
      "Clinician disappointment", "Missed ROI, failed AI pilots",
      "No enterprise-wide learning", "Manual patchwork", ":contentReference[oaicite:6]{index=6}"],
     ["High IT maintenance burden", "Medium–High", "Medium",
      "IT staff burnout", "~$300K/yr downtime",
-     "Institutional knowledge loss", "Vendor upgrades break workflows", ":contentReference[oaicite:7]{index=7}"],
+     "Knowledge loss", "Vendor upgrades break workflows", ":contentReference[oaicite:7]{index=7}"],
     ["Vendor lock-in", "High", "Medium",
      "Feeling trapped", "High switching costs",
      "Loss of data control", "Inflexible workflows", ":contentReference[oaicite:8]{index=8}"],
@@ -93,3 +92,23 @@ df = pd.DataFrame(data, columns=[
 ])
 
 st.dataframe(df, use_container_width=True)
+
+# --- Validation Section ---
+st.markdown("## Validation of Pain Points (Engagement Data)")
+
+st.markdown("""
+We tested messaging around these pains on LinkedIn:
+
+- **Post 1: 'Do we need a consolidated view of all the modalities for imaging?'**  
+  - CTR: **18.75%** (very high)  
+  - Validates **Data Fragmentation** as a top-of-mind pain.  
+
+- **Post 2: 'Does your clinical data live in multiple places?'**  
+  - CTR: **5.17%** (lower)  
+  - Suggests broad 'data silo' framing is less compelling than **modality-specific pain**.  
+
+### Why This Is Viable
+- Clinically specific messaging (imaging, modalities) **drives engagement** → users click to explore solutions.  
+- General "data silo" pain resonates less, confirming the sharper pain is in **radiology workflow fragmentation**.  
+- This validates the **business opportunity**: solving imaging-specific fragmentation aligns with **market demand** and **regulatory pressure**.  
+""")
