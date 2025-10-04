@@ -16,10 +16,11 @@ vendors = [
     "Ambra Health", "Life Image"
 ]
 
+# Grid configuration (spread out more)
 cols = 4
-x_spacing, y_spacing = 2.5, 1.5
+x_spacing, y_spacing = 3.5, 2.0   # wider spacing
 
-fig, ax = plt.subplots(figsize=(12, 8))
+fig, ax = plt.subplots(figsize=(15, 10))  # bigger canvas
 
 vendor_positions = []
 for i, v in enumerate(vendors):
