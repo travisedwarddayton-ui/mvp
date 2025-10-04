@@ -1,12 +1,14 @@
-# app_vendor_grid_with_painpoints_clean.py
+# app_pain_matrix.py
 import streamlit as st
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch
 
-st.set_page_config(page_title="Radiology Vendor Grid with Pain Points", layout="wide")
+st.set_page_config(page_title="Radiology Workflow Pain Matrix", layout="wide")
 
 st.title("Radiology Vendor Clouds ↔ Hospital (As-Is)")
 
+# Vendor list (grid)
 vendors = [
     "GE Healthcare", "Philips Healthcare", "Agfa HealthCare", "Sectra",
     "Merative (Merge)", "Fujifilm (Synapse)", "Change Healthcare / Optum",
@@ -14,20 +16,18 @@ vendors = [
     "Ambra Health", "Life Image"
 ]
 
-# Grid layout
 cols = 4
 rows = (len(vendors) + cols - 1) // cols
 x_spacing, y_spacing = 0.25, 0.18
 
 fig, ax = plt.subplots(figsize=(15, 10))
 
-# Plot vendor clouds
+# Vendor grid
 for i, v in enumerate(vendors):
     col = i % cols
     row = i // cols
     x = 0.2 + col * x_spacing
     y = 1.0 - row * y_spacing
-
     cloud = Ellipse((x, y), width=0.22, height=0.10,
                     facecolor="#cfe8ff", edgecolor="blue", linewidth=1.2)
     ax.add_patch(cloud)
@@ -48,23 +48,48 @@ arrow = FancyArrowPatch((0.5, 0.25), (0.5, -0.05),
 ax.add_patch(arrow)
 ax.text(0.52, 0.1, "Data Movement", fontsize=10, rotation=90, va="center")
 
-# Adjust canvas
 ax.set_xlim(0, 1.1)
 ax.set_ylim(-0.2, 1.2)
 ax.axis("off")
 
 st.pyplot(fig)
 
-# ---- Pain points BELOW diagram (outside figure) ----
-st.markdown("## Pain Points in Current State")
-st.markdown("""
-- Data fragmented across 13+ vendor silos  
-- No universal interoperability layer  
-- Radiologists waste time finding priors  
-- Duplicate scans increase cost & risk  
-- HIPAA/GDPR compliance harder to enforce  
-- Inconsistent analytics & AI integration  
-- High IT maintenance & upgrade burden  
-- Vendor lock-in makes switching costly  
-- Delays in diagnosis and patient care  
-""")
+# ---- Pain Matrix Table ----
+st.markdown("## Pain Points in Radiology Workflow (Fact-Checkable)")
+
+data = [
+    ["Data fragmented across 13+ vendor silos", "High", "Constantly",
+     "Frustration, burnout", "Revenue leakage, lost throughput",
+     "No unified patient view", "Constant app toggling", ":contentReference[oaicite:0]{index=0}"],
+    ["No universal interoperability layer", "High", "Constantly",
+     "Clinician stress", "High IT integration cost",
+     "Limited knowledge transfer", "Manual routing between RIS/PACS/EHR", ":contentReference[oaicite:1]{index=1}:contentReference[oaicite:2]{index=2}"],
+    ["Radiologists waste time finding priors", "Medium–High", "Constantly",
+     "Fatigue, morale loss", "Lost billable reads (minutes per case)",
+     "Cognitive overload", "Slower turnaround, missed SLAs", ":contentReference[oaicite:3]{index=3}"],
+    ["Duplicate scans ordered", "High", "Medium",
+     "Patient anxiety", "Duplicate scan cost, wasted scanner hours",
+     "Lost insight from scattered priors", "Redundant workflows", ":contentReference[oaicite:4]{index=4}"],
+    ["Compliance gaps (HIPAA/GDPR)", "High", "Constantly",
+     "Anxiety of breach liability", "Avg breach ~$10.93M",
+     "Policy uncertainty", "No centralized audit", ":contentReference[oaicite:5]{index=5}"],
+    ["Inconsistent analytics & AI integration", "Medium", "Constantly",
+     "Clinician disappointment", "Missed ROI, failed AI pilots",
+     "No enterprise-wide learning", "Manual patchwork", ":contentReference[oaicite:6]{index=6}"],
+    ["High IT maintenance burden", "Medium–High", "Medium",
+     "IT staff burnout", "~$300K/yr downtime",
+     "Institutional knowledge loss", "Vendor upgrades break workflows", ":contentReference[oaicite:7]{index=7}"],
+    ["Vendor lock-in", "High", "Medium",
+     "Feeling trapped", "High switching costs",
+     "Loss of data control", "Inflexible workflows", ":contentReference[oaicite:8]{index=8}"],
+    ["Delays in diagnosis & care", "High", "Constantly",
+     "Patient stress, worse outcomes", "Longer LOS, higher costs",
+     "Incomplete priors = errors", "Every workflow slowed", ":contentReference[oaicite:9]{index=9}"],
+]
+
+df = pd.DataFrame(data, columns=[
+    "Pain Point", "Severity", "Frequency", "Emotional Pain",
+    "Financial Pain", "Knowledge Pain", "Process Pain", "Reference"
+])
+
+st.dataframe(df, use_container_width=True)
