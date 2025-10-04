@@ -96,19 +96,38 @@ st.dataframe(df, use_container_width=True)
 # --- Validation Section ---
 st.markdown("## Validation of Pain Points (Engagement Data)")
 
+# LinkedIn validation data
+validation_data = [
+    ["Consolidated view of modalities (Image Post)", "18.75%", 
+     "Strong validation of **Data Fragmentation** and **Finding Priors** pain"],
+    ["Clinical data in multiple places (Video Post)", "5.17%", 
+     "Weak resonance — generic silo framing less compelling"],
+    ["Data Quality Framework (Video Post)", "6.67%", 
+     "Moderate validation of **Knowledge/Process Pain** (analytics & standards)"],
+    ["Oncology compliance obligations (Document Post)", "16.67%", 
+     "Strong validation of **Compliance Pain** (HIPAA/GDPR/Oncology regs)"]
+]
+
+validation_df = pd.DataFrame(validation_data, columns=[
+    "Post Tested", "CTR", "Validation Insight"
+])
+
+st.dataframe(validation_df, use_container_width=True)
+
 st.markdown("""
-We tested messaging around these pains on LinkedIn:
+### Insights
+- **Top validated pains** (CTR > 15%):  
+  1. Imaging data fragmentation & priors  
+  2. Compliance obligations (oncology/regulatory burden)  
 
-- **Post 1: 'Do we need a consolidated view of all the modalities for imaging?'**  
-  - CTR: **18.75%** (very high)  
-  - Validates **Data Fragmentation** as a top-of-mind pain.  
+- **Medium signal pains** (5–7% CTR):  
+  - Data quality frameworks, analytics consistency  
 
-- **Post 2: 'Does your clinical data live in multiple places?'**  
-  - CTR: **5.17%** (lower)  
-  - Suggests broad 'data silo' framing is less compelling than **modality-specific pain**.  
+- **Weak signal pains** (<5–7% CTR):  
+  - Generic "data silos" framing  
 
 ### Why This Is Viable
-- Clinically specific messaging (imaging, modalities) **drives engagement** → users click to explore solutions.  
-- General "data silo" pain resonates less, confirming the sharper pain is in **radiology workflow fragmentation**.  
-- This validates the **business opportunity**: solving imaging-specific fragmentation aligns with **market demand** and **regulatory pressure**.  
+- Messaging tied directly to **radiology workflow pains** performs best.  
+- Compliance burdens resonate with decision-makers (oncology obligations post).  
+- General “data silos” lacks urgency — specificity drives engagement.  
 """)
