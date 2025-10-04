@@ -1,14 +1,14 @@
-# app_current_state_modalities.py
+# app_current_state_modalities_corrected.py
 import streamlit as st
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle
 import matplotlib.lines as mlines
 
-st.set_page_config(page_title="Radiology Data Pain - Current State (Vendors + Modalities)", layout="wide")
+st.set_page_config(page_title="Radiology Data Pain - Current State (Corrected Labels)", layout="wide")
 
 st.title("Current State: Radiology Data Scattered Across Vendor Clouds and Modalities")
 
-# Vendors with example modality focus (for storytelling)
+# Vendors with corrected modality/role labels
 vendors_modalities = [
     ("GE Healthcare", "CT / Cardiac"),
     ("Philips Healthcare", "MRI / Neuro"),
@@ -19,8 +19,8 @@ vendors_modalities = [
     ("Change Healthcare / Optum", "PET / Oncology"),
     ("Hyland Healthcare", "Enterprise Archive"),
     ("Intelerad", "Cloud PACS / Mixed"),
-    ("Ambra Health", "Image Sharing"),
-    ("Life Image", "Interoperability"),
+    ("Ambra Health", "Image Sharing / VNA"),
+    ("Life Image", "Interoperability Network"),
     ("Infinitt Healthcare", "Regional PACS"),
     ("Novarad", "Community / Small Clinics"),
 ]
@@ -35,7 +35,7 @@ for i, (vendor, modality) in enumerate(vendors_modalities):
 
 fig, ax = plt.subplots(figsize=(15, 10))
 
-# Draw clouds with archives and modality labels
+# Draw clouds with archives and modality/role labels
 for (x, y), (vendor, modality) in zip(positions, vendors_modalities):
     # Cloud
     cloud = Ellipse((x, y), width=0.3, height=0.15, facecolor="#cce5ff", edgecolor="blue", alpha=0.7)
@@ -47,7 +47,7 @@ for (x, y), (vendor, modality) in zip(positions, vendors_modalities):
     ax.add_patch(archive)
     ax.text(x, y, "Archive", ha="center", va="center", fontsize=8, color="black")
 
-    # Modality text under archive
+    # Modality / role under archive
     ax.text(x, y-0.07, modality, ha="center", va="top", fontsize=8, color="darkred", style="italic")
 
 # Draw hospital at bottom
@@ -69,11 +69,9 @@ st.pyplot(fig)
 
 st.markdown("""
 ### Data Pain Amplified
-- Each **vendor cloud** also tends to dominate certain **modalities** (CT, MRI, X-ray, Ultrasound, PET, Mammography).  
-- Patient studies are therefore **split both by vendor *and* by modality**.  
-- To find priors, radiologists must **know the vendor** *and* the **modality archive**.  
-- This fragmentation leads to:  
-  - **Lost time** searching multiple systems  
-  - **Duplicate scans** when priors aren’t found  
-  - **Inconsistent analytics & compliance gaps**  
+- Each **vendor cloud** has its own **archive silo**.  
+- Some are **modality-specific** (CT, MRI, Mammo, PET, Ultrasound).  
+- Others are **workflow/network players** like Ambra (*Image Sharing / VNA*) and Life Image (*Interoperability Network*).  
+- The hospital must connect to **all of them separately** to find priors.  
+- This causes delays, duplicate scans, wasted cost, and compliance headaches.  
 """)
