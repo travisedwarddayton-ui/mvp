@@ -40,17 +40,17 @@ ax.text(hospital_x, hospital_y, "Hospital", ha="center", va="center",
         fontsize=13, weight="bold", color="black")
 
 # Bi-directional arrow
-arrow = FancyArrowPatch((0.5, 0.25), (0.5, -0.05),
-                        arrowstyle="<->", mutation_scale=20,
-                        linewidth=2, color="black")
-ax.add_patch(arrow)
-ax.text(0.52, 0.1, "Data Movement", fontsize=10, rotation=90, va="center")
+# Add arrows from each vendor to hospital
+for i, v in enumerate(vendors):
+    col = i % cols
+    row = i // cols
+    x = 0.2 + col * x_spacing
+    y = 1.0 - row * y_spacing
+    arrow = FancyArrowPatch((x, y-0.05), (hospital_x, hospital_y+0.05),
+                            arrowstyle="-|>", mutation_scale=10,
+                            linewidth=1, color="gray", alpha=0.6)
+    ax.add_patch(arrow)
 
-ax.set_xlim(0, 1.1)
-ax.set_ylim(-0.2, 1.2)
-ax.axis("off")
-
-st.pyplot(fig)
 
 # --- Pain Points Table ---
 st.markdown("## Pain Points in Radiology Workflow")
