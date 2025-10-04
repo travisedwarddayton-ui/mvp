@@ -1,4 +1,4 @@
-# app_vendor_grid_with_painpoints.py
+# app_vendor_grid_with_painpoints_clean.py
 import streamlit as st
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch
@@ -19,7 +19,7 @@ cols = 4
 rows = (len(vendors) + cols - 1) // cols
 x_spacing, y_spacing = 0.25, 0.18
 
-fig, ax = plt.subplots(figsize=(15, 12))
+fig, ax = plt.subplots(figsize=(15, 10))
 
 # Plot vendor clouds
 for i, v in enumerate(vendors):
@@ -48,26 +48,23 @@ arrow = FancyArrowPatch((0.5, 0.25), (0.5, -0.05),
 ax.add_patch(arrow)
 ax.text(0.52, 0.1, "Data Movement", fontsize=10, rotation=90, va="center")
 
-# Pain points listed below hospital
-pain_points = [
-    "Data fragmented across 13+ vendor silos",
-    "No universal interoperability layer",
-    "Radiologists waste time finding priors",
-    "Duplicate scans increase cost & risk",
-    "HIPAA/GDPR compliance harder to enforce",
-    "Inconsistent analytics & AI integration",
-    "High IT maintenance & upgrade burden",
-    "Vendor lock-in makes switching costly",
-    "Delays in diagnosis and patient care"
-]
-
-y_start = -0.25
-for i, point in enumerate(pain_points):
-    ax.text(0.5, y_start - (i*0.06), f"• {point}",
-            ha="center", va="top", fontsize=9, color="black")
-
+# Adjust canvas
 ax.set_xlim(0, 1.1)
-ax.set_ylim(-0.9, 1.2)  # extra space at bottom
+ax.set_ylim(-0.2, 1.2)
 ax.axis("off")
 
 st.pyplot(fig)
+
+# ---- Pain points BELOW diagram (outside figure) ----
+st.markdown("## Pain Points in Current State")
+st.markdown("""
+- Data fragmented across 13+ vendor silos  
+- No universal interoperability layer  
+- Radiologists waste time finding priors  
+- Duplicate scans increase cost & risk  
+- HIPAA/GDPR compliance harder to enforce  
+- Inconsistent analytics & AI integration  
+- High IT maintenance & upgrade burden  
+- Vendor lock-in makes switching costly  
+- Delays in diagnosis and patient care  
+""")
