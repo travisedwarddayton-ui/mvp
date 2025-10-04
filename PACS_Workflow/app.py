@@ -1,81 +1,50 @@
 # radiology_pain_app.py
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch
 
 st.set_page_config(page_title="Radiology Workflow Pain Validation", layout="wide")
 
 st.title("Imaging IT Vendor Landscape (As-Is)")
 
-# --- Vendor List (18 clouds, deduplicated) ---
-vendors = [
-    "GE Healthcare",
-    "Philips Healthcare",
-    "Agfa HealthCare",
-    "Sectra",
-    "Merative (Merge)",
-    "Fujifilm (Synapse)",
-    "Change Healthcare / Optum",
-    "Infinitt Healthcare",
-    "Novarad",
-    "Hyland Healthcare",
-    "Intelerad",
-    "Ambra Health",
-    "Life Image",
-    "Siemens Healthineers (syngo.via, AI Rad Companion)",
-    "Carestream Health (enterprise imaging, PACS)",
-    "Visage Imaging (enterprise viewer)",
-    "PaxeraHealth (vendor-neutral PACS, modular solutions)",
-    "Mach7 Technologies (VNA + interoperability)"
-]
+# --- Vendor List (instead of diagram) ---
+st.markdown("""
+Hospitals typically manage connections to **15–20 different imaging IT vendors**, each
+operating as a siloed "cloud" with its own PACS, VNA, viewer, or exchange.  
 
-# --- Layout parameters ---
-cols = 4
-x_spacing, y_spacing = 4.0, 2.3
-fig, ax = plt.subplots(figsize=(18, 12))
+### 🌩 Core Vendors (widely used in hospitals)
+- GE Healthcare
+- Philips Healthcare
+- Agfa HealthCare
+- Sectra
+- Merative (Merge, ex-IBM)
+- Fujifilm (Synapse)
+- Change Healthcare / Optum
+- Infinitt Healthcare
+- Novarad
+- Hyland Healthcare
+- Intelerad
+- Ambra Health
+- Life Image
 
-vendor_positions = []
-for i, v in enumerate(vendors):
-    col = i % cols
-    row = i // cols
-    x = col * x_spacing + 2
-    y = 8 - row * y_spacing
-    vendor_positions.append((x, y))
+### 🌩 Extended Vendors (secondary but growing)
+- Siemens Healthineers (syngo.via, AI Rad Companion)
+- Carestream Health (enterprise imaging, PACS)
+- Visage Imaging (enterprise viewer)
+- PaxeraHealth (vendor-neutral PACS, modular solutions)
+- Mach7 Technologies (VNA + interoperability)
 
-    cloud = Ellipse((x, y), width=3.0, height=1.2,
-                    facecolor="#ffcc99", edgecolor="#cc6600", linewidth=1.8)
-    ax.add_patch(cloud)
-    ax.text(x, y, v, ha="center", va="center", fontsize=9,
-            color="black", weight="bold", wrap=True)
+---
+### 📌 Key Insight
+- Each of these vendors represents a **separate 'cloud' or silo**.  
+- Hospitals must integrate all of them individually, which creates:
+  - Fragmented data across silos  
+  - Duplicate scans and inefficiencies  
+  - Slower diagnosis and delayed care  
+  - Compliance and interoperability risks  
+  - High IT maintenance costs  
+""")
 
-# --- Hospital Box ---
-hospital_x, hospital_y = (x_spacing * (cols-1))/2 + 2, -1.5
-hospital = Rectangle((hospital_x-3, hospital_y-1), 6, 2,
-                     facecolor="#90EE90", edgecolor="black", linewidth=2.0)
-ax.add_patch(hospital)
-ax.text(hospital_x, hospital_y, "Hospital", ha="center", va="center",
-        fontsize=16, weight="bold", color="black")
-
-# --- Arrows from vendors to hospital ---
-for (x, y) in vendor_positions:
-    arrow = FancyArrowPatch((x, y-0.6), (hospital_x, hospital_y+1),
-                            arrowstyle="->", mutation_scale=14,
-                            linewidth=1.5, color="gray", alpha=0.7,
-                            connectionstyle="arc3,rad=0.15")
-    ax.add_patch(arrow)
-
-# --- Styling ---
-ax.set_xlim(0, cols * x_spacing + 4)
-ax.set_ylim(-3, 9)
-ax.axis("off")
-ax.set_facecolor("white")
-ax.set_title("As-Is: Hospital Manages 18+ Imaging Vendor Connections",
-             fontsize=18, weight="bold", pad=20)
-
-st.pyplot(fig)
-
-# --- Pain Points Table (with external links) ---
+# --- Pain Points Table ---
 st.markdown("## Pain Points in Radiology Workflow")
 
 pain_data = [
