@@ -121,6 +121,7 @@ validation_df = pd.DataFrame(validation_data, columns=[
 
 st.dataframe(validation_df, use_container_width=True)
 
+# --- Insights ---
 st.markdown("""
 ### Insights
 - **Top validated pains**: Imaging data fragmentation (18.75%) and Compliance obligations (16.67%).  
@@ -131,4 +132,37 @@ st.markdown("""
 - Specific clinical pain (modalities, priors) resonates much stronger than broad "data silo" talk.  
 - Compliance burden (esp. oncology) also shows strong engagement.  
 - Validates business opportunity: hospitals want **workflow simplification + compliance protection**.  
+""")
+
+# --- Solution Section ---
+st.markdown("""
+## 🚑 Therefore, the Solution Is:
+
+A **Unified, Vendor-Neutral Imaging Platform** that:
+
+- **Collapses 15–20 vendor silos into one interoperability layer**  
+  → no more juggling GE, Philips, Sectra, etc. separately.  
+
+- **Provides a single patient-centric view**  
+  → all priors, modalities, and imaging studies visible in one place.  
+
+- **Automates interoperability**  
+  → standardized exchange via FHIR, DICOMweb, TEFCA instead of one-off custom integrations.  
+
+- **Strengthens compliance**  
+  → centralized audit logging, HIPAA/GDPR-ready, reduced breach risk.  
+
+- **Enables analytics & AI**  
+  → enterprise-wide data foundation for decision support and predictive modeling.  
+
+- **Reduces IT burden**  
+  → no more brittle point-to-point connections; vendor upgrades don’t break workflows.  
+
+- **Delivers measurable ROI**  
+  → fewer duplicate scans, faster reads, improved throughput, lower downtime and integration costs.  
+
+---
+📌 In short:  
+👉 Today: hospitals operate in a **“spaghetti mess” of 18 imaging clouds**.  
+👉 Tomorrow: a **unified imaging platform** simplifies workflows, protects compliance, and accelerates care.  
 """)
