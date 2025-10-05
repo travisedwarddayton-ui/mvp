@@ -1,4 +1,4 @@
-# federated_imaging_demo.py
+# federated_imaging_demo_clean.py
 import streamlit as st
 import pandas as pd
 import time
@@ -9,9 +9,8 @@ import asyncio
 st.set_page_config(page_title="Federated Imaging Query Demo", layout="wide")
 
 # -----------------------------
-# Mock "Cloud" Datasets
+# Mock Datasets
 # -----------------------------
-# Cloud A (e.g., Philips) – uses 'patient_id', 'study', 'date'
 CLOUD_A = [
     {"patient_id": "123", "study": "CT Thorax", "modality": "CT", "vendor": "Cloud A", "date": "2025-09-25"},
     {"patient_id": "123", "study": "CT Abdomen", "modality": "CT", "vendor": "Cloud A", "date": "2025-07-02"},
@@ -20,7 +19,6 @@ CLOUD_A = [
     {"patient_id": "123", "study": "XR Chest", "modality": "CR", "vendor": "Cloud A", "date": "2025-10-01"},
 ]
 
-# Cloud B (e.g., GE) – uses 'pid', 'exam', 'study_date'
 CLOUD_B = [
     {"pid": "123", "exam": "CT Chest", "modality": "CT", "vendor": "Cloud B", "study_date": "2025-09-25"},
     {"pid": "123", "exam": "CT Thorax w/ contrast", "modality": "CT", "vendor": "Cloud B", "study_date": "2025-04-19"},
@@ -30,21 +28,15 @@ CLOUD_B = [
 ]
 
 # -----------------------------
-# Helper: normalizer to a common schema (FHIR-ish)
+# Helper Functions
 # -----------------------------
 def normalize(record):
-    # Handle both schemas and map to a simple common form
-    patient_id = record.get("patient_id") or record.get("pid") or ""
-    study      = record.get("study") or record.get("exam") or ""
-    date_val   = record.get("date") or record.get("study_date") or ""
-    modality   = record.get("modality") or ""
-    vendor     = record.get("vendor") or "Unknown"
     return {
-        "patient_id": patient_id,
-        "study": study,
-        "modality": modality,
-        "date": date_val,
-        "vendor": vendor
+        "patient_id": record.get("patient_id") or record.get("pid"),
+        "study": record.get("study") or record.get("exam"),
+        "modality": record.get("modality"),
+        "date": record.get("date") or record.get("study_date"),
+        "vendor": record.get("vendor"),
     }
 
 def filter_records(records, patient_id, modality, start_date, end_date):
@@ -55,30 +47,25 @@ def filter_records(records, patient_id, modality, start_date, end_date):
             continue
         if modality and n["modality"] != modality:
             continue
-        if start_date or end_date:
-            try:
-                d = datetime.strptime(n["date"], "%Y-%m-%d").date()
-                if start_date and d < start_date: continue
-                if end_date and d > end_date: continue
-            except Exception:
-                pass
+        try:
+            d = datetime.strptime(n["date"], "%Y-%m-%d").date()
+            if start_date and d < start_date: continue
+            if end_date and d > end_date: continue
+        except Exception:
+            pass
         out.append(n)
     return out
 
-# -----------------------------
-# Simulate “querying” a cloud with latency
-# -----------------------------
-def query_cloud_sync(cloud_name, dataset, patient_id, modality, start_date, end_date, min_delay=0.6, max_delay=1.6):
+def query_cloud(dataset, patient_id, modality, start_date, end_date):
     start = time.perf_counter()
-    # simulate variable network / API latency
-    time.sleep(random.uniform(min_delay, max_delay))
+    time.sleep(random.uniform(0.4, 1.2))  # simulate network latency
     results = filter_records(dataset, patient_id, modality, start_date, end_date)
     elapsed = time.perf_counter() - start
     return results, elapsed
 
-async def query_cloud_async(cloud_name, dataset, patient_id, modality, start_date, end_date, min_delay=0.6, max_delay=1.6):
+async def query_cloud_async(dataset, patient_id, modality, start_date, end_date):
     t0 = time.perf_counter()
-    await asyncio.sleep(random.uniform(min_delay, max_delay))
+    await asyncio.sleep(random.uniform(0.4, 1.2))
     results = filter_records(dataset, patient_id, modality, start_date, end_date)
     elapsed = time.perf_counter() - t0
     return results, elapsed
@@ -86,24 +73,15 @@ async def query_cloud_async(cloud_name, dataset, patient_id, modality, start_dat
 # -----------------------------
 # UI
 # -----------------------------
-st.title("Federated Imaging Query – Two Clouds → One Unified View")
+st.title("Federated Imaging Query Demo")
 
-st.markdown(
-    "This demo simulates **two vendor clouds** with different schemas. "
-    "We compare a **fragmented search** (run two separate queries and merge manually) "
-    "vs. a **federated search** (one query, unified results)."
-)
+st.markdown("""
+Hospitals often store imaging data across **multiple vendor clouds**.
+This demo shows how a **federated query layer** can unify results instantly
+without switching systems.
+""")
 
-with st.expander("How this helps your video", expanded=False):
-    st.markdown(
-        "- Show Cloud A and Cloud B tabs (different schemas).\n"
-        "- Run a fragmented search (two queries, two timers).\n"
-        "- Run a federated search (one query, one timer).\n"
-        "- Highlight **time saved** and **clicks reduced**.\n"
-        "- Download the run metrics CSV to include real numbers in your post."
-    )
-
-st.subheader("Query")
+st.subheader("Query Filters")
 c1, c2, c3, c4 = st.columns([1.2, 1, 1, 1])
 with c1:
     patient_id = st.text_input("Patient ID", value="123")
@@ -114,138 +92,77 @@ with c3:
 with c4:
     end_date = st.date_input("End date", value=date(2025, 10, 31))
 
-st.caption("Tip: use Patient ‘123’ + Modality ‘CT’ to see overlapping studies across both clouds.")
+st.divider()
 
-st.markdown("---")
+tabs = st.tabs(["Cloud A (separate query)", "Cloud B (separate query)", "Federated (unified query)", "Metrics"])
 
-tabA, tabB, tabUnified, tabMetrics = st.tabs(["Cloud A (solo)", "Cloud B (solo)", "Federated (unified)", "Run Metrics"])
-
-# State to store last metrics for download
 if "run_log" not in st.session_state:
     st.session_state.run_log = []
 
-with tabA:
-    st.markdown("### Cloud A Results")
-    if st.button("Query Cloud A", key="btn_a"):
-        results_a, t_a = query_cloud_sync("A", CLOUD_A, patient_id, modality, start_date, end_date)
-        st.success(f"Cloud A returned {len(results_a)} records in {t_a:.2f} s")
-        st.dataframe(pd.DataFrame(results_a))
+with tabs[0]:
+    st.markdown("### Cloud A (Fragmented Search)")
+    if st.button("Run Query on Cloud A"):
+        results, t = query_cloud(CLOUD_A, patient_id, modality, start_date, end_date)
+        st.success(f"Returned {len(results)} results in {t:.2f} seconds")
+        st.dataframe(pd.DataFrame(results))
 
-with tabB:
-    st.markdown("### Cloud B Results")
-    if st.button("Query Cloud B", key="btn_b"):
-        results_b, t_b = query_cloud_sync("B", CLOUD_B, patient_id, modality, start_date, end_date)
-        st.success(f"Cloud B returned {len(results_b)} records in {t_b:.2f} s")
-        st.dataframe(pd.DataFrame(results_b))
+with tabs[1]:
+    st.markdown("### Cloud B (Fragmented Search)")
+    if st.button("Run Query on Cloud B"):
+        results, t = query_cloud(CLOUD_B, patient_id, modality, start_date, end_date)
+        st.success(f"Returned {len(results)} results in {t:.2f} seconds")
+        st.dataframe(pd.DataFrame(results))
 
-with tabUnified:
-    st.markdown("### Federated Query")
-    cU1, cU2 = st.columns([1, 1])
-    with cU1:
-        parallel = st.checkbox("Parallel fan-out (async)", value=True,
-                               help="Simulate querying both vendors in parallel.")
-    with cU2:
-        min_d = st.slider("Min latency per cloud (s)", 0.0, 2.0, 0.6, 0.1)
-        max_d = st.slider("Max latency per cloud (s)", 0.2, 3.0, 1.6, 0.1)
+with tabs[2]:
+    st.markdown("### Federated Query (Unified View)")
+    if st.button("Run Federated Query"):
+        # Fragmented baseline
+        r_a, t_a = query_cloud(CLOUD_A, patient_id, modality, start_date, end_date)
+        r_b, t_b = query_cloud(CLOUD_B, patient_id, modality, start_date, end_date)
+        fragmented = t_a + t_b
 
-    if st.button("Run Federated Query", key="btn_unified"):
-        # Baseline: fragmented (two separate solo queries, add their times)
-        results_a, t_a = query_cloud_sync("A", CLOUD_A, patient_id, modality, start_date, end_date, min_d, max_d)
-        results_b, t_b = query_cloud_sync("B", CLOUD_B, patient_id, modality, start_date, end_date, min_d, max_d)
-        fragmented_time = t_a + t_b
-
-        # Federated: either parallel or serial under one call
+        # Federated async
         t0 = time.perf_counter()
-        if parallel:
-            # run both in parallel
-            results_a2, t_a2 = asyncio.run(
-                query_cloud_async("A", CLOUD_A, patient_id, modality, start_date, end_date, min_d, max_d)
-            )
-            results_b2, t_b2 = asyncio.run(
-                query_cloud_async("B", CLOUD_B, patient_id, modality, start_date, end_date, min_d, max_d)
-            )
-            federated_time = time.perf_counter() - t0
-            unified = results_a2 + results_b2
-        else:
-            # serial fan-out under one call
-            results_a2, t_a2 = query_cloud_sync("A", CLOUD_A, patient_id, modality, start_date, end_date, min_d, max_d)
-            results_b2, t_b2 = query_cloud_sync("B", CLOUD_B, patient_id, modality, start_date, end_date, min_d, max_d)
-            federated_time = time.perf_counter() - t0
-            unified = results_a2 + results_b2
+        r_a2, t_a2 = asyncio.run(query_cloud_async(CLOUD_A, patient_id, modality, start_date, end_date))
+        r_b2, t_b2 = asyncio.run(query_cloud_async(CLOUD_B, patient_id, modality, start_date, end_date))
+        federated = time.perf_counter() - t0
 
+        unified = sorted(r_a2 + r_b2, key=lambda x: x["date"])
         df_unified = pd.DataFrame(unified)
-        df_unified = df_unified.sort_values(["date", "vendor"]).reset_index(drop=True)
+        saved = fragmented - federated
+        pct = (saved / fragmented * 100) if fragmented > 0 else 0
 
-        saved = max(fragmented_time - federated_time, 0)
-        pct   = (saved / fragmented_time * 100) if fragmented_time > 0 else 0
-
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Fragmented time (2 separate queries)", f"{fragmented_time:.2f} s")
-        k2.metric("Federated time (1 query)", f"{federated_time:.2f} s")
-        k3.metric("Time saved", f"{saved:.2f} s", f"{pct:.0f}%")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Fragmented time", f"{fragmented:.2f}s")
+        c2.metric("Federated time", f"{federated:.2f}s")
+        c3.metric("Time saved", f"{saved:.2f}s", f"{pct:.0f}%")
 
         st.dataframe(df_unified, use_container_width=True)
 
-        # Log the run in session state
         st.session_state.run_log.append({
-            "ts": datetime.now().isoformat(timespec="seconds"),
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
             "patient_id": patient_id,
             "modality": modality,
-            "start_date": str(start_date),
-            "end_date": str(end_date),
-            "fragmented_time_s": round(fragmented_time, 3),
-            "federated_time_s": round(federated_time, 3),
-            "time_saved_s": round(saved, 3),
+            "fragmented_time_s": round(fragmented, 2),
+            "federated_time_s": round(federated, 2),
+            "time_saved_s": round(saved, 2),
             "pct_saved": round(pct, 1),
-            "parallel": parallel,
-            "min_latency": min_d,
-            "max_latency": max_d,
-            "unified_count": len(df_unified),
+            "records": len(df_unified)
         })
 
-with tabMetrics:
-    st.markdown("### Recorded Runs (for your video / post)")
-    log_df = pd.DataFrame(st.session_state.run_log)
-    if not log_df.empty:
-        st.dataframe(log_df, use_container_width=True)
+with tabs[3]:
+    st.markdown("### Recorded Runs")
+    if st.session_state.run_log:
+        df_log = pd.DataFrame(st.session_state.run_log)
+        st.dataframe(df_log, use_container_width=True)
         st.download_button(
-            "Download run metrics as CSV",
-            data=log_df.to_csv(index=False).encode("utf-8"),
+            "Download CSV",
+            df_log.to_csv(index=False).encode("utf-8"),
             file_name="federated_query_runs.csv",
             mime="text/csv"
         )
     else:
         st.info("Run a federated query to record metrics.")
 
-st.markdown("---")
-st.caption(
-    "Demo notes: Cloud A and Cloud B use different field names and schemas. "
-    "The federated layer normalizes them into a common structure and optionally fans out in parallel. "
-    "Adjust latency sliders to simulate slower or faster vendor APIs."
-)
-
-# -----------------------------
-# (Optional) How you'd plug in ChatGPT for natural-language queries
-# -----------------------------
-with st.expander("Optional: How to add ChatGPT orchestration (pseudo-code)"):
-    st.code(
-        '''
-# from openai import OpenAI
-# client = OpenAI(api_key="YOUR_KEY")
-
-# nl_query = st.text_input("Ask in natural language (e.g., 'show all CT priors for 123 since June')")
-# if nl_query:
-#     # 1) Use GPT to parse NL to structured filters
-#     parsed = client.chat.completions.create(
-#         model="gpt-4o-mini",
-#         messages=[
-#             {"role": "system", "content": "Extract patient_id, modality, start_date, end_date from the user's question."},
-#             {"role": "user", "content": nl_query}
-#         ]
-#     ).choices[0].message.content
-#
-#     # 2) Apply parsed filters to federated_query(...)
-#     # 3) Use GPT again to summarize unified results in clinician-friendly prose
-        ''',
-        language="python"
-    )
+st.divider()
+st.caption("Demo purpose only. Cloud A and B are mock data sources. Federated query normalizes both into a unified schema.")
