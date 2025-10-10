@@ -1,66 +1,97 @@
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
-import tempfile
-import os
+import pydicom
+import io
 
-# ======= CONFIG =======
+# ===== CONFIG =====
 ORTHANC_URL = "https://mwyksr0jwqlfxm-8042.proxy.runpod.net"
-ORTHANC_USER = "orthanc"
-ORTHANC_PASS = "orthanc"
-AUTH = HTTPBasicAuth(ORTHANC_USER, ORTHANC_PASS)
+AUTH = HTTPBasicAuth("orthanc", "orthanc")
 
 st.set_page_config(page_title="DICOM Anonymizer", page_icon="🩻", layout="centered")
 
-st.title("🩻 DICOM Anonymizer")
-st.write("Upload a DICOM file — it will be sent to the Orthanc server, anonymized, and made available for download.")
+st.title("🩻 DICOM Anonymizer (Hosted Version)")
+st.write("Upload a DICOM file — it will be validated locally and then sent securely to your Orthanc server.")
 
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
 if uploaded_file is not None:
-    # Save file temporarily
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as tmp:
-        tmp.write(uploaded_file.read())
-        dicom_path = tmp.name
+    try:
+        # Read entire file into memory
+        dicom_bytes = uploaded_file.read()
+        buffer = io.BytesIO(dicom_bytes)
 
-    st.info("Uploading to Orthanc server...")
-    with open(dicom_path, "rb") as f:
-        r = requests.post(
-            f"{ORTHANC_URL}/instances",
-            data=f,
-            auth=AUTH,
-            headers={"Content-Type": "application/dicom"}
-        )
+        # Validate locally with pydicom
+        dataset = pydicom.dcmread(buffer, stop_before_pixels=False)
+        already_anon = getattr(dataset, "PatientIdentityRemoved", "").upper() == "YES"
+        has_pixels = hasattr(dataset, "PixelData")
 
-    if r.status_code == 200:
-        instance_info = r.json()
-        instance_id = instance_info["ID"]
-        st.success(f"File uploaded successfully. Instance ID: {instance_id}")
+        st.subheader("📋 Local DICOM Header Check")
+        st.json({
+            "Already Anonymized": already_anon,
+            "Has Pixel Data": has_pixels,
+            "Patient Name": str(getattr(dataset, "PatientName", "N/A")),
+            "Modality": str(getattr(dataset, "Modality", "N/A")),
+        })
 
-        # Anonymize the instance
-        st.info("Anonymizing the DICOM file...")
-        anon_response = requests.post(
-            f"{ORTHANC_URL}/instances/{instance_id}/anonymize",
-            auth=AUTH
-        )
-
-        if anon_response.status_code == 200:
-            anon_id = anon_response.json()["ID"]
-            st.success("Anonymization complete!")
-
-            # Retrieve anonymized DICOM file
-            download_url = f"{ORTHANC_URL}/instances/{anon_id}/file"
-
-            st.download_button(
-                label="⬇️ Download Anonymized DICOM",
-                data=requests.get(download_url, auth=AUTH).content,
-                file_name="anonymized.dcm",
-                mime="application/dicom"
-            )
+        if already_anon:
+            st.warning("⚠️ Already anonymized — skipping upload.")
+        elif not has_pixels:
+            st.error("❌ No PixelData found — cannot anonymize.")
         else:
-            st.error(f"Anonymization failed: {anon_response.text}")
-    else:
-        st.error(f"Upload failed: {r.text}")
+            st.success("✅ Valid DICOM — ready to upload.")
 
-    # Clean up temporary file
-    os.remove(dicom_path)
+            if st.button("Upload & Anonymize"):
+                try:
+                    st.info("Uploading to Orthanc (please wait)...")
+
+                    # Streamlit hosted fix: re-wrap bytes in new BytesIO each time
+                    files = {"file": ("upload.dcm", io.BytesIO(dicom_bytes), "application/dicom")}
+
+                    r = requests.post(
+                        f"{ORTHANC_URL}/instances",
+                        files=files,
+                        auth=AUTH,
+                        timeout=30,
+                        verify=True  # Enforce HTTPS validation
+                    )
+
+                    if r.status_code == 200:
+                        instance_id = r.json()["ID"]
+                        st.success(f"Uploaded successfully. Instance ID: {instance_id}")
+
+                        st.info("Anonymizing...")
+                        anon_response = requests.post(
+                            f"{ORTHANC_URL}/instances/{instance_id}/anonymize",
+                            auth=AUTH,
+                            timeout=30,
+                            verify=True
+                        )
+
+                        if anon_response.status_code == 200:
+                            anon_id = anon_response.json()["ID"]
+                            st.success("🎉 Anonymization complete!")
+
+                            anon_file = requests.get(
+                                f"{ORTHANC_URL}/instances/{anon_id}/file",
+                                auth=AUTH,
+                                timeout=30,
+                                verify=True
+                            )
+
+                            st.download_button(
+                                label="⬇️ Download Anonymized DICOM",
+                                data=anon_file.content,
+                                file_name="anonymized.dcm",
+                                mime="application/dicom"
+                            )
+                        else:
+                            st.error(f"Anonymization failed: {anon_response.text}")
+                    else:
+                        st.error(f"Upload failed: {r.text}")
+
+                except requests.exceptions.RequestException as e:
+                    st.error(f"🌐 Connection error: {e}")
+
+    except Exception as e:
+        st.error(f"⚠️ Invalid DICOM file: {e}")
