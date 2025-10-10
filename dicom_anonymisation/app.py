@@ -10,6 +10,7 @@ ORTHANC_URL = "https://mwyksr0jwqlfxm-8042.proxy.runpod.net"
 AUTH = HTTPBasicAuth("orthanc", "orthanc")
 
 st.set_page_config(page_title="🩻 DICOM Anonymizer", layout="centered")
+
 st.title("🩻 DICOM Anonymizer (Hosted Version)")
 st.write("Upload a DICOM file — it will be validated locally and then sent securely to your Orthanc server.")
 
@@ -17,11 +18,9 @@ uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
 if uploaded_file:
     try:
-        # Read DICOM bytes
         dicom_bytes = uploaded_file.read()
         dataset = pydicom.dcmread(io.BytesIO(dicom_bytes), stop_before_pixels=False)
 
-        # Local metadata
         already_anon = getattr(dataset, "PatientIdentityRemoved", "").upper() == "YES"
         has_pixels = hasattr(dataset, "PixelData")
 
@@ -43,29 +42,24 @@ if uploaded_file:
             if st.button("🚀 Upload & Anonymize"):
                 st.info("Uploading to Orthanc... Please wait...")
 
-                files = {"file": ("upload.dcm", dicom_bytes, "application/octet-stream")}
-
                 try:
                     upload = requests.post(
                         f"{ORTHANC_URL}/instances",
-                        files=files,
+                        data=dicom_bytes,  # ✅ raw binary payload (matches your working curl)
+                        headers={"Content-Type": "application/octet-stream"},
                         auth=AUTH,
                         timeout=60,
-                        verify=False  # RunPod proxy uses HTTPS frontend, HTTP backend
+                        verify=False
                     )
 
                     st.write(f"🔎 Upload status: {upload.status_code}")
                     st.text("---- Raw Upload Response ----")
                     st.text(upload.text)
 
-                    # Try to parse Orthanc response
                     try:
                         upload_json = upload.json()
                     except json.JSONDecodeError:
                         st.error("❌ Unexpected upload response (not JSON)")
-                        st.text("Headers:")
-                        st.json(dict(upload.headers))
-                        st.text("Raw body:")
                         st.text(upload.text)
                         st.stop()
 
@@ -91,9 +85,6 @@ if uploaded_file:
                             anon_json = anon.json()
                         except json.JSONDecodeError:
                             st.error("❌ Unexpected anonymize response (not JSON)")
-                            st.text("Headers:")
-                            st.json(dict(anon.headers))
-                            st.text("Raw body:")
                             st.text(anon.text)
                             st.stop()
 
