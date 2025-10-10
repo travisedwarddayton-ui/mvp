@@ -1,3 +1,4 @@
 plotly
 matplotlib
 fpdf2
+graphviz
