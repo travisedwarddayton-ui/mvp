@@ -60,9 +60,15 @@ if uploaded_file is not None:
                     # --- Try parse JSON safely ---
                     try:
                         upload_json = upload.json()
-                    except json.JSONDecodeError:
-                        st.error(f"Unexpected upload response: {upload.text}")
+                   except json.JSONDecodeError:
+                        st.error("❌ Unexpected upload response (not JSON)")
+                        st.write("**Status code:**", upload.status_code)
+                        st.text("**Headers:**")
+                        st.json(dict(upload.headers))
+                        st.text("**Raw body:**")
+                        st.text(upload.text)
                         st.stop()
+
 
                     if upload.status_code == 200:
                         instance_id = upload_json.get("ID")
