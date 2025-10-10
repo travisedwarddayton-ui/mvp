@@ -53,7 +53,7 @@ if uploaded_file is not None:
                         files=files,
                         auth=AUTH,
                         timeout=30,
-                        verify=True  # Enforce HTTPS validation
+                        verify=False  # Enforce HTTPS validation
                     )
 
                     if r.status_code == 200:
