@@ -1,30 +1,77 @@
 
 import streamlit as st
+import statistics
+import re
+import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Software Sorting Trainer – Drag & Drop (with Fallback)", layout="wide")
-
-st.title("💻 Software Sorting Trainer")
-st.caption("Sort software into **System**, **Utility**, and **Application**. Uses drag & drop if available, otherwise a click-to-move fallback.")
-
-# ---------------------------------------------------------
-# Data
-# ---------------------------------------------------------
-CORRECT = {
-    "Operating System": "System Software",
-    "Device Drivers": "System Software",
-    "Firmware": "System Software",
-    "Antivirus": "Utility Software",
-    "File Compression Tool": "Utility Software",
-    "Backup Software": "Utility Software",
-    "Microsoft Word": "Application Software",
-    "Web Browser": "Application Software",
-    "EHR App (Electronic Health Record)": "Application Software",
-}
-
-CATEGORIES = ["System Software", "Utility Software", "Application Software"]
+st.set_page_config(page_title="DIKW Pyramid Interactive", layout="wide")
+st.title("🧭 DIKW Pyramid Interactive")
+st.caption("Drag cards (or use the fallback) to order **Data → Information → Knowledge → Wisdom**, then transform raw vitals into a care plan.")
 
 # ---------------------------------------------------------
-# Try to import drag-and-drop component
+# Helpers
+# ---------------------------------------------------------
+TARGET_ORDER = ["Data", "Information", "Knowledge", "Wisdom"]
+
+def normalize(v: str) -> str:
+    return v.strip().title()
+
+def check_order(order_list):
+    clean = [normalize(x) for x in order_list]
+    return clean == TARGET_ORDER
+
+def parse_numbers(text):
+    nums = re.findall(r"-?\d+(?:\.\d+)?", text or "")
+    return [float(n) for n in nums]
+
+def vitals_to_info(bp_list):
+    if not bp_list:
+        return {}
+    mean_val = statistics.mean(bp_list)
+    trend = "flat"
+    if len(bp_list) >= 2:
+        if bp_list[-1] > bp_list[0] + 5:
+            trend = "rising"
+        elif bp_list[-1] < bp_list[0] - 5:
+            trend = "falling"
+    return {"count": len(bp_list), "mean": mean_val, "min": min(bp_list), "max": max(bp_list), "trend": trend}
+
+def info_to_knowledge(info):
+    if not info:
+        return {}
+    mean_val = info["mean"]
+    # Very simple teaching rule (not clinical guidance): mean >= 140 -> potential HTN concern
+    rule = None
+    if mean_val >= 140:
+        rule = "Potential hypertension concern (mean systolic ≥ 140)."
+    elif mean_val >= 130:
+        rule = "Elevated blood pressure (mean systolic ≥ 130)."
+    else:
+        rule = "Within normal/elevated range; continue routine monitoring."
+    return {"rule": rule}
+
+def knowledge_to_wisdom(info, knowledge):
+    if not info or not knowledge:
+        return []
+    actions = []
+    if "hypertension" in knowledge["rule"].lower():
+        actions = [
+            "Recheck BP in 15 minutes; ensure proper cuff size/position.",
+            "Notify medical officer and review antihypertensive orders.",
+            "Assess symptoms (headache, vision changes, chest pain).",
+            "Provide brief education: salt reduction, medication adherence.",
+        ]
+    elif "elevated" in knowledge["rule"].lower():
+        actions = [
+            "Reinforce lifestyle advice; schedule follow-up reading.",
+            "Check technique; confirm with manual cuff if available."
+        ]
+    else:
+        actions = ["Continue routine monitoring as per protocol."]
+    return actions
+
+# ---------------------------------------------------------
+# Drag-and-drop availability
 # ---------------------------------------------------------
 HAVE_SORTABLES = False
 try:
@@ -33,146 +80,106 @@ try:
 except Exception:
     HAVE_SORTABLES = False
 
-st.info("💡 Tip: Think about whether the software manages hardware, maintains the system, or helps you do daily tasks.")
+# ---------------------------------------------------------
+# Section 1: Order the DIKW Cards
+# ---------------------------------------------------------
+st.header("1) Order the DIKW Cards")
 
-# ---------------------------------------------------------
-# Helper: grading
-# ---------------------------------------------------------
-def grade(placed: dict[str, list[str]]):
-    total = sum(len(v) for v in placed.values())
-    correct = 0
-    rows = []
-    for cat, items in placed.items():
-        for item in items:
-            expected = CORRECT.get(item)
-            if expected == cat:
-                rows.append(("✅", item, cat, "Correct"))
-                correct += 1
-            else:
-                rows.append(("❌", item, cat or "—", f"Correct: {expected}"))
-    return correct, total, rows
+cards = ["Wisdom", "Knowledge", "Information", "Data"]  # intentionally shuffled
 
-# ---------------------------------------------------------
-# Mode A: Real Drag & Drop (requires streamlit-sortables)
-# ---------------------------------------------------------
 if HAVE_SORTABLES:
-    st.subheader("🧩 Drag & Drop Mode (streamlit-sortables detected)")
-    items = list(CORRECT.keys())
-
-    st.markdown("#### Step 1: Drag each card into the correct category")
+    st.success("Drag-and-drop enabled (streamlit-sortables detected). Arrange the cards left → right.")
     placed = sort_items(
-        items=items,
-        groups=CATEGORIES,
+        items=cards,
+        groups=["DIKW Order"],
         direction="horizontal",
-        multi_containers=True,
-        key="dragdrop_sort"
+        multi_containers=False,
+        key="dikw_sort"
     )
-
-    st.divider()
-    if st.button("✅ Check My Answers", key="check_drag"):
-        correct, total, rows = grade(placed)
-        st.subheader("🧾 Results")
-        for symbol, item, chosen, note in rows:
-            if symbol == "✅":
-                st.success(f"{symbol} {item} — {chosen}")
-            else:
-                st.error(f"{symbol} {item} — {chosen} | {note}")
-        st.info(f"**Score:** {correct} / {total}")
-        if correct == total:
-            st.balloons()
-            st.success("Excellent! You’ve mastered software classification.")
-        elif correct >= total * 0.7:
-            st.success("Good work! Review the ones you misplaced.")
-        else:
-            st.warning("Keep practicing — review the chapter on software types.")
-
-# ---------------------------------------------------------
-# Mode B: Fallback – Click-to-Move (no extra packages)
-# ---------------------------------------------------------
+    # sort_items returns a dict of group -> list
+    current_order = placed.get("DIKW Order", [])
 else:
-    st.subheader("🧩 Fallback Mode (no extra packages required)")
-    st.caption("Install `streamlit-sortables` for drag & drop, or use this no-dependency interactive interface.")
+    st.info("Fallback mode (no extra packages). Use the selectors to set the order from 1 to 4.")
+    cols = st.columns(4)
+    positions = {}
+    for i, label in enumerate(cards):
+        with cols[i]:
+            positions[label] = st.selectbox(
+                f"{label} position",
+                ["1","2","3","4"],
+                key=f"pos_{label}"
+            )
+    # Build the order by position value
+    try:
+        current_order = [lbl for lbl, pos in sorted(positions.items(), key=lambda x: int(x[1]))]
+    except Exception:
+        current_order = []
 
-    if "pool" not in st.session_state:
-        st.session_state.pool = list(CORRECT.keys())
-        st.session_state.system = []
-        st.session_state.utility = []
-        st.session_state.application = []
-
-    left, mid, right = st.columns(3)
-
-    with left:
-        st.markdown("### 🎒 Item Pool")
-        if st.session_state.pool:
-            selected = st.selectbox("Pick an item to place:", ["— Select —"] + st.session_state.pool, key="pick_item")
-        else:
-            selected = "— Select —"
-        st.markdown("### Move to:")
-        c1, c2, c3 = st.columns(3)
-        if c1.button("🧠 System", use_container_width=True):
-            if selected and selected != "— Select —" and selected in st.session_state.pool:
-                st.session_state.pool.remove(selected)
-                st.session_state.system.append(selected)
-        if c2.button("🧰 Utility", use_container_width=True):
-            if selected and selected != "— Select —" and selected in st.session_state.pool:
-                st.session_state.pool.remove(selected)
-                st.session_state.utility.append(selected)
-        if c3.button("📝 App", use_container_width=True):
-            if selected and selected != "— Select —" and selected in st.session_state.pool:
-                st.session_state.pool.remove(selected)
-                st.session_state.application.append(selected)
-
-        if st.button("♻️ Reset"):
-            st.session_state.pool = list(CORRECT.keys())
-            st.session_state.system = []
-            st.session_state.utility = []
-            st.session_state.application = []
-
-    with mid:
-        st.markdown("### 🧠 System Software")
-        for i, item in enumerate(st.session_state.system):
-            cols = st.columns([4,1])
-            cols[0].markdown(f"- **{item}**")
-            if cols[1].button("←", key=f"sys_back_{i}"):
-                st.session_state.system.remove(item)
-                st.session_state.pool.append(item)
-
-    with right:
-        st.markdown("### 🧰 Utility Software")
-        for i, item in enumerate(st.session_state.utility):
-            cols = st.columns([4,1])
-            cols[0].markdown(f"- **{item}**")
-            if cols[1].button("←", key=f"uti_back_{i}"):
-                st.session_state.utility.remove(item)
-                st.session_state.pool.append(item)
-
-        st.markdown("### 📝 Application Software")
-        for i, item in enumerate(st.session_state.application):
-            cols = st.columns([4,1])
-            cols[0].markdown(f"- **{item}**")
-            if cols[1].button("←", key=f"app_back_{i}"):
-                st.session_state.application.remove(item)
-                st.session_state.pool.append(item)
-
-    st.divider()
-    if st.button("✅ Check My Answers", key="check_fallback"):
-        placed = {
-            "System Software": st.session_state.system,
-            "Utility Software": st.session_state.utility,
-            "Application Software": st.session_state.application,
-        }
-        correct, total, rows = grade(placed)
-        st.subheader("🧾 Results")
-        for symbol, item, chosen, note in rows:
-            if symbol == "✅":
-                st.success(f"{symbol} {item} — {chosen}")
-            else:
-                st.error(f"{symbol} {item} — {chosen} | {note}")
-        st.info(f"**Score:** {correct} / {total}")
-        if correct == total:
+if st.button("✅ Check Order"):
+    if not current_order or len(current_order) != 4:
+        st.warning("Please arrange all four cards.")
+    else:
+        if check_order(current_order):
             st.balloons()
-            st.success("Excellent! You’ve mastered software classification.")
-        elif correct >= total * 0.7:
-            st.success("Good work! Review the ones you misplaced.")
+            st.success(f"Correct! {current_order}")
         else:
-            st.warning("Keep practicing — review the chapter on software types.")
+            st.error(f"Not quite: {current_order} → Correct order is {TARGET_ORDER}.")
+
+st.divider()
+
+# ---------------------------------------------------------
+# Section 2: From Raw Vitals to a Care Plan
+# ---------------------------------------------------------
+st.header("2) Transform Raw Vitals into a Care Plan (DIKW in action)")
+
+colL, colR = st.columns([1,1])
+
+with colL:
+    st.subheader("Enter Systolic BP Readings")
+    st.caption("Paste numbers separated by commas or spaces (e.g., 128, 135, 142, 150).")
+    raw = st.text_area("Readings:", height=120, placeholder="128 135 142 150 148 152")
+    bp_vals = parse_numbers(raw)
+    if bp_vals:
+        st.write(f"Detected {len(bp_vals)} readings.")
+    else:
+        st.write("No readings yet.")
+
+    if bp_vals:
+        # Plot
+        fig, ax = plt.subplots(figsize=(6,3))
+        ax.plot(range(1, len(bp_vals)+1), bp_vals, marker="o")
+        ax.set_xlabel("Reading #")
+        ax.set_ylabel("Systolic BP")
+        ax.set_title("Raw Data → Visualized Trend (Information)")
+        ax.grid(True, linestyle="--", linewidth=0.5)
+        st.pyplot(fig)
+
+with colR:
+    st.subheader("DIKW Breakdown")
+    if bp_vals:
+        st.markdown("**Data**")
+        st.write(f"Raw values: {bp_vals}")
+
+        info = vitals_to_info(bp_vals)
+        st.markdown("**Information**")
+        st.write({
+            "count": info["count"],
+            "mean": round(info["mean"], 1),
+            "min": info["min"],
+            "max": info["max"],
+            "trend": info["trend"]
+        })
+
+        know = info_to_knowledge(info)
+        st.markdown("**Knowledge**")
+        st.write(know["rule"])
+
+        wiz = knowledge_to_wisdom(info, know)
+        st.markdown("**Wisdom (Action Plan)**")
+        for a in wiz:
+            st.markdown(f"- {a}")
+    else:
+        st.info("Enter readings on the left to see the DIKW transformation.")
+
+st.divider()
+st.caption("Educational demo only — not medical advice. DIKW model adapted for nursing informatics practice.")
