@@ -46,15 +46,19 @@ if uploaded_file is not None:
                     st.info("Uploading to Orthanc (please wait)...")
 
                     # Streamlit hosted fix: re-wrap bytes in new BytesIO each time
-                    files = {"file": ("upload.dcm", io.BytesIO(dicom_bytes), "application/dicom")}
+                    files = {"file": ("upload.dcm", dicom_bytes, "application/dicom")}
 
                     r = requests.post(
                         f"{ORTHANC_URL}/instances",
                         files=files,
                         auth=AUTH,
                         timeout=30,
-                        verify=False  # Enforce HTTPS validation
+                        verify=False
                     )
+                    
+                    st.write(f"Status: {r.status_code}")
+                    st.text(r.text)
+
 
                     if r.status_code == 200:
                         instance_id = r.json()["ID"]
