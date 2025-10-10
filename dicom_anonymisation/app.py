@@ -48,16 +48,18 @@ if uploaded_file is not None:
                     # Streamlit hosted fix: re-wrap bytes in new BytesIO each time
                     files = {"file": ("upload.dcm", dicom_bytes, "application/dicom")}
 
-                    r = requests.post(
-                        f"{ORTHANC_URL}/instances",
-                        files=files,
-                        auth=AUTH,
-                        timeout=30,
-                        verify=False
-                    )
-                    
-                    st.write(f"Status: {r.status_code}")
-                    st.text(r.text)
+                r = requests.post(
+                f"{ORTHANC_URL}/instances",
+                files={"file": ("upload.dcm", dicom_bytes, "application/dicom")},
+                auth=AUTH,
+                timeout=30,
+                verify=False
+            )
+            
+                st.write(f"Status: {r.status_code}")
+                st.text(r.text)
+                st.text(str(r.headers))
+
 
 
                     if r.status_code == 200:
