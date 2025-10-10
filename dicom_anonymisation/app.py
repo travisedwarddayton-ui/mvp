@@ -5,7 +5,7 @@ import tempfile
 import os
 
 # ======= CONFIG =======
-ORTHANC_URL = "http://localhost:8042"
+ORTHANC_URL = "https://mwyksr0jwqlfxm-8042.proxy.runpod.net"
 ORTHANC_USER = "orthanc"
 ORTHANC_PASS = "orthanc"
 AUTH = HTTPBasicAuth(ORTHANC_USER, ORTHANC_PASS)
