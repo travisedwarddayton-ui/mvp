@@ -1,25 +1,18 @@
-
 import streamlit as st
 import statistics
 import re
+import time
+import graphviz
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="DIKW Pyramid Interactive", layout="wide")
-st.title("🧭 DIKW Pyramid Interactive")
-st.caption("Drag cards (or use the fallback) to order **Data → Information → Knowledge → Wisdom**, then transform raw vitals into a care plan.")
+st.set_page_config(page_title="DIKW Visual Interactive", layout="wide")
 
-# ---------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------
-TARGET_ORDER = ["Data", "Information", "Knowledge", "Wisdom"]
+st.title("🧭 DIKW Pyramid Interactive – Visual Edition")
+st.caption("Watch how raw data transforms into information, knowledge, and wisdom.")
 
-def normalize(v: str) -> str:
-    return v.strip().title()
-
-def check_order(order_list):
-    clean = [normalize(x) for x in order_list]
-    return clean == TARGET_ORDER
-
+# ------------------------------------------------------------
+# Utility functions
+# ------------------------------------------------------------
 def parse_numbers(text):
     nums = re.findall(r"-?\d+(?:\.\d+)?", text or "")
     return [float(n) for n in nums]
@@ -40,14 +33,12 @@ def info_to_knowledge(info):
     if not info:
         return {}
     mean_val = info["mean"]
-    # Very simple teaching rule (not clinical guidance): mean >= 140 -> potential HTN concern
-    rule = None
     if mean_val >= 140:
         rule = "Potential hypertension concern (mean systolic ≥ 140)."
     elif mean_val >= 130:
         rule = "Elevated blood pressure (mean systolic ≥ 130)."
     else:
-        rule = "Within normal/elevated range; continue routine monitoring."
+        rule = "Within normal range; continue routine monitoring."
     return {"rule": rule}
 
 def knowledge_to_wisdom(info, knowledge):
@@ -56,130 +47,101 @@ def knowledge_to_wisdom(info, knowledge):
     actions = []
     if "hypertension" in knowledge["rule"].lower():
         actions = [
-            "Recheck BP in 15 minutes; ensure proper cuff size/position.",
+            "Recheck BP in 15 minutes; confirm proper cuff use.",
             "Notify medical officer and review antihypertensive orders.",
-            "Assess symptoms (headache, vision changes, chest pain).",
-            "Provide brief education: salt reduction, medication adherence.",
+            "Educate on salt reduction and medication adherence.",
         ]
     elif "elevated" in knowledge["rule"].lower():
         actions = [
             "Reinforce lifestyle advice; schedule follow-up reading.",
-            "Check technique; confirm with manual cuff if available."
+            "Confirm with manual cuff if possible."
         ]
     else:
         actions = ["Continue routine monitoring as per protocol."]
     return actions
 
-# ---------------------------------------------------------
-# Drag-and-drop availability
-# ---------------------------------------------------------
-HAVE_SORTABLES = False
-try:
-    from streamlit_sortables import sort_items  # type: ignore
-    HAVE_SORTABLES = True
-except Exception:
-    HAVE_SORTABLES = False
+# ------------------------------------------------------------
+# Step 1: Animated DIKW Pyramid
+# ------------------------------------------------------------
+st.header("1️⃣ The DIKW Pyramid")
 
-# ---------------------------------------------------------
-# Section 1: Order the DIKW Cards
-# ---------------------------------------------------------
-st.header("1) Order the DIKW Cards")
+st.caption("Click **Reveal Layers** to visualize how each level builds upon the previous one.")
 
-cards = ["Wisdom", "Knowledge", "Information", "Data"]  # intentionally shuffled
+if st.button("Reveal Layers 🧩"):
+    layers = [
+        ("Data", "#219ebc"),
+        ("Information", "#8ecae6"),
+        ("Knowledge", "#ffb703"),
+        ("Wisdom", "#fb8500")
+    ]
 
-if HAVE_SORTABLES:
-    st.success("Drag-and-drop enabled (streamlit-sortables detected). Arrange the cards left → right.")
-    placed = sort_items(
-        items=cards,
-        groups=["DIKW Order"],
-        direction="horizontal",
-        multi_containers=False,
-        key="dikw_sort"
-    )
-    # sort_items returns a dict of group -> list
-    current_order = placed.get("DIKW Order", [])
-else:
-    st.info("Fallback mode (no extra packages). Use the selectors to set the order from 1 to 4.")
-    cols = st.columns(4)
-    positions = {}
-    for i, label in enumerate(cards):
-        with cols[i]:
-            positions[label] = st.selectbox(
-                f"{label} position",
-                ["1","2","3","4"],
-                key=f"pos_{label}"
-            )
-    # Build the order by position value
-    try:
-        current_order = [lbl for lbl, pos in sorted(positions.items(), key=lambda x: int(x[1]))]
-    except Exception:
-        current_order = []
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.axis("off")
+    for i, (label, color) in enumerate(layers):
+        ax.fill_between(
+            [i-1.5, i+1.5],
+            [i, i],
+            [i+1, i+1],
+            color=color,
+            alpha=0.8
+        )
+        ax.text(i, i+0.5, label, ha="center", va="center", fontsize=14, color="black", fontweight="bold")
+        st.pyplot(fig)
+        time.sleep(1)
 
-if st.button("✅ Check Order"):
-    if not current_order or len(current_order) != 4:
-        st.warning("Please arrange all four cards.")
-    else:
-        if check_order(current_order):
-            st.balloons()
-            st.success(f"Correct! {current_order}")
-        else:
-            st.error(f"Not quite: {current_order} → Correct order is {TARGET_ORDER}.")
+    st.success("✅ The DIKW Pyramid builds from raw facts (Data) to wise action (Wisdom).")
 
 st.divider()
 
-# ---------------------------------------------------------
-# Section 2: From Raw Vitals to a Care Plan
-# ---------------------------------------------------------
-st.header("2) Transform Raw Vitals into a Care Plan (DIKW in action)")
+# ------------------------------------------------------------
+# Step 2: Data Flow Visualization
+# ------------------------------------------------------------
+st.header("2️⃣ Visualize the DIKW Flow with Real Data")
 
-colL, colR = st.columns([1,1])
+col1, col2 = st.columns([1, 1])
 
-with colL:
+with col1:
     st.subheader("Enter Systolic BP Readings")
-    st.caption("Paste numbers separated by commas or spaces (e.g., 128, 135, 142, 150).")
-    raw = st.text_area("Readings:", height=120, placeholder="128 135 142 150 148 152")
+    st.caption("Example: 120, 128, 136, 142, 150")
+    raw = st.text_area("Readings", height=120)
     bp_vals = parse_numbers(raw)
     if bp_vals:
-        st.write(f"Detected {len(bp_vals)} readings.")
-    else:
-        st.write("No readings yet.")
-
-    if bp_vals:
-        # Plot
-        fig, ax = plt.subplots(figsize=(6,3))
-        ax.plot(range(1, len(bp_vals)+1), bp_vals, marker="o")
+        st.write(f"Detected {len(bp_vals)} readings: {bp_vals}")
+        fig, ax = plt.subplots(figsize=(5, 3))
+        ax.plot(range(1, len(bp_vals)+1), bp_vals, marker="o", color="#219ebc")
         ax.set_xlabel("Reading #")
         ax.set_ylabel("Systolic BP")
-        ax.set_title("Raw Data → Visualized Trend (Information)")
-        ax.grid(True, linestyle="--", linewidth=0.5)
+        ax.grid(True, linestyle="--", alpha=0.5)
         st.pyplot(fig)
+    else:
+        st.info("Enter numeric BP readings above to see transformation.")
 
-with colR:
-    st.subheader("DIKW Breakdown")
+with col2:
     if bp_vals:
-        st.markdown("**Data**")
-        st.write(f"Raw values: {bp_vals}")
+        st.subheader("Transformation Flow")
 
         info = vitals_to_info(bp_vals)
-        st.markdown("**Information**")
-        st.write({
-            "count": info["count"],
-            "mean": round(info["mean"], 1),
-            "min": info["min"],
-            "max": info["max"],
-            "trend": info["trend"]
-        })
-
         know = info_to_knowledge(info)
-        st.markdown("**Knowledge**")
-        st.write(know["rule"])
-
         wiz = knowledge_to_wisdom(info, know)
-        st.markdown("**Wisdom (Action Plan)**")
-        for a in wiz:
-            st.markdown(f"- {a}")
-    else:
-        st.info("Enter readings on the left to see the DIKW transformation.")
+
+        dot = graphviz.Digraph()
+        dot.attr(rankdir="TB", splines="polyline", nodesep="0.6", ranksep="0.6")
+
+        dot.node("data", f"📈 Data\\nRaw BP: {len(bp_vals)} readings", style="filled", color="#219ebc", shape="box")
+        dot.node("info", f"📊 Information\\nMean={round(info['mean'],1)}, Trend={info['trend']}", style="filled", color="#8ecae6", shape="box")
+        dot.node("know", f"🧠 Knowledge\\n{know['rule']}", style="filled", color="#ffb703", shape="box")
+        dot.node("wis", f"💡 Wisdom\\n{len(wiz)} Recommended Actions", style="filled", color="#fb8500", shape="box")
+
+        dot.edge("data", "info")
+        dot.edge("info", "know")
+        dot.edge("know", "wis")
+
+        st.graphviz_chart(dot)
+
+        with st.expander("View Actions (Wisdom)"):
+            for a in wiz:
+                st.markdown(f"- {a}")
 
 st.divider()
-st.caption("Educational demo only — not medical advice. DIKW model adapted for nursing informatics practice.")
+
+st.caption("Educational simulation only — not medical advice. Demonstrates the DIKW hierarchy in Nursing Informatics.")
