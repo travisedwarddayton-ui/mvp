@@ -9,18 +9,19 @@ import json
 ORTHANC_URL = "https://mwyksr0jwqlfxm-8042.proxy.runpod.net"
 AUTH = HTTPBasicAuth("orthanc", "orthanc")
 
-st.set_page_config(page_title="DICOM Anonymizer", page_icon="🩻", layout="centered")
-
+st.set_page_config(page_title="🩻 DICOM Anonymizer", layout="centered")
 st.title("🩻 DICOM Anonymizer (Hosted Version)")
 st.write("Upload a DICOM file — it will be validated locally and then sent securely to your Orthanc server.")
 
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
-if uploaded_file is not None:
+if uploaded_file:
     try:
+        # Read DICOM bytes
         dicom_bytes = uploaded_file.read()
         dataset = pydicom.dcmread(io.BytesIO(dicom_bytes), stop_before_pixels=False)
 
+        # Local metadata
         already_anon = getattr(dataset, "PatientIdentityRemoved", "").upper() == "YES"
         has_pixels = hasattr(dataset, "PixelData")
 
@@ -39,8 +40,8 @@ if uploaded_file is not None:
         else:
             st.success("✅ Valid DICOM — ready to upload.")
 
-            if st.button("Upload & Anonymize"):
-                st.info("📤 Uploading to Orthanc...")
+            if st.button("🚀 Upload & Anonymize"):
+                st.info("Uploading to Orthanc... Please wait...")
 
                 files = {"file": ("upload.dcm", dicom_bytes, "application/octet-stream")}
 
@@ -49,56 +50,61 @@ if uploaded_file is not None:
                         f"{ORTHANC_URL}/instances",
                         files=files,
                         auth=AUTH,
-                        timeout=30,
-                        verify=False
+                        timeout=60,
+                        verify=False  # RunPod proxy uses HTTPS frontend, HTTP backend
                     )
 
-                    # --- Debug info ---
-                    st.write(f"🔎 Upload Status: {upload.status_code}")
+                    st.write(f"🔎 Upload status: {upload.status_code}")
+                    st.text("---- Raw Upload Response ----")
                     st.text(upload.text)
 
-                    # --- Try parse JSON safely ---
+                    # Try to parse Orthanc response
                     try:
                         upload_json = upload.json()
-                   except json.JSONDecodeError:
-                       st.error("❌ Unexpected upload response (not JSON)")
-                       st.write("**Status code:**", upload.status_code)
-                       st.text("**Headers:**")
-                       st.json(dict(upload.headers))
-                       st.text("**Raw body:**")
-                       st.text(upload.text)
-                       st.stop()
-
+                    except json.JSONDecodeError:
+                        st.error("❌ Unexpected upload response (not JSON)")
+                        st.text("Headers:")
+                        st.json(dict(upload.headers))
+                        st.text("Raw body:")
+                        st.text(upload.text)
+                        st.stop()
 
                     if upload.status_code == 200:
                         instance_id = upload_json.get("ID")
                         st.success(f"✅ Uploaded successfully — Instance ID: {instance_id}")
 
-                        st.info("🧩 Anonymizing instance...")
+                        # ---- Anonymize ----
+                        st.info("🔄 Anonymizing on Orthanc...")
+
                         anon = requests.post(
                             f"{ORTHANC_URL}/instances/{instance_id}/anonymize",
                             auth=AUTH,
-                            timeout=30,
+                            timeout=60,
                             verify=False
                         )
 
-                        st.write(f"🔎 Anonymize Status: {anon.status_code}")
+                        st.write(f"Anonymize status: {anon.status_code}")
+                        st.text("---- Raw Anonymize Response ----")
                         st.text(anon.text)
 
                         try:
                             anon_json = anon.json()
                         except json.JSONDecodeError:
-                            st.error(f"Unexpected anonymize response: {anon.text}")
+                            st.error("❌ Unexpected anonymize response (not JSON)")
+                            st.text("Headers:")
+                            st.json(dict(anon.headers))
+                            st.text("Raw body:")
+                            st.text(anon.text)
                             st.stop()
 
                         if anon.status_code == 200:
                             anon_id = anon_json.get("ID")
-                            st.success("🎉 Anonymization complete!")
+                            st.success(f"🎉 Anonymization complete! ID: {anon_id}")
 
                             anon_file = requests.get(
                                 f"{ORTHANC_URL}/instances/{anon_id}/file",
                                 auth=AUTH,
-                                timeout=30,
+                                timeout=60,
                                 verify=False
                             )
 
@@ -110,7 +116,6 @@ if uploaded_file is not None:
                             )
                         else:
                             st.error(f"❌ Anonymization failed: {anon.text}")
-
                     else:
                         st.error(f"❌ Upload failed: {upload.text}")
 
@@ -119,3 +124,6 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"⚠️ Invalid DICOM file: {e}")
+
+else:
+    st.info("Please upload a DICOM (.dcm) file to begin.")
