@@ -51,13 +51,13 @@ if uploaded_file:
             # --- Trigger Cleaner ---
             st.info("🧠 Running OCR anonymization on Orthanc instance...")
 
+            lua_code = f'os.execute("/scripts/on_stored_instance.sh {instance_id}")'
+
             trigger = requests.post(
                 f"{ORTHANC_URL}/tools/execute-script",
                 auth=AUTH,
-                json={
-                    "command": ["/scripts/on_stored_instance.sh", instance_id],
-                    "timeout": 600
-                },
+                data=lua_code,
+                headers={"Content-Type": "text/plain"},
                 verify=False
             )
 
