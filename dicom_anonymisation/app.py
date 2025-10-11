@@ -74,54 +74,70 @@ if uploaded_file:
             # --- Poll Orthanc for new anonymized image ---
             st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
 
-           # --- Poll Orthanc for new anonymized image ---
-st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
+            cleaned_id = None
+            deadline = time.time() + 180  # wait up to 3 minutes
 
-cleaned_id = None
-deadline = time.time() + 180  # wait up to 3 minutes
+            while time.time() < deadline:
+                time.sleep(5)
+                resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+                if resp.status_code != 200:
+                    continue
 
-while time.time() < deadline:
-    time.sleep(5)
-    resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
-    if resp.status_code != 200:
-        continue
+                all_ids = resp.json()
+                candidate_ids = [iid for iid in all_ids if iid != instance_id]
 
-    all_ids = resp.json()
-    # Filter out the original one
-    candidate_ids = [iid for iid in all_ids if iid != instance_id]
+                # Query timestamps for each candidate
+                timestamps = {}
+                for iid in candidate_ids:
+                    meta = requests.get(f"{ORTHANC_URL}/instances/{iid}/metadata/LastUpdate", auth=AUTH, verify=False)
+                    if meta.status_code == 200:
+                        try:
+                            timestamps[iid] = float(meta.text)
+                        except ValueError:
+                            pass
 
-    # Query timestamps for each candidate
-    timestamps = {}
-    for iid in candidate_ids:
-        meta = requests.get(f"{ORTHANC_URL}/instances/{iid}/metadata/LastUpdate", auth=AUTH, verify=False)
-        if meta.status_code == 200:
-            timestamps[iid] = float(meta.text)
-    
-    if timestamps:
-        # Pick most recently updated instance
-        cleaned_id = max(timestamps, key=timestamps.get)
-        # Double check it's newer than the uploaded one
-        orig_meta = requests.get(f"{ORTHANC_URL}/instances/{instance_id}/metadata/LastUpdate", auth=AUTH, verify=False)
-        if orig_meta.status_code == 200:
-            if timestamps[cleaned_id] > float(orig_meta.text):
-                break
+                if timestamps:
+                    cleaned_id = max(timestamps, key=timestamps.get)
+                    # Double check it's newer than the uploaded one
+                    orig_meta = requests.get(f"{ORTHANC_URL}/instances/{instance_id}/metadata/LastUpdate", auth=AUTH, verify=False)
+                    if orig_meta.status_code == 200:
+                        try:
+                            if timestamps[cleaned_id] > float(orig_meta.text):
+                                break
+                        except ValueError:
+                            pass
 
-st.write(f"🕓 Checked up to {len(timestamps)} instances...")
+                st.write(f"⏱️ Checking for new cleaned file... ({int(deadline - time.time())}s left)")
 
-if cleaned_id:
-    st.success(f"✅ Cleaned DICOM detected: {cleaned_id}")
+            st.write(f"🕓 Checked {len(timestamps)} instances.")
 
-    anon_file = requests.get(
-        f"{ORTHANC_URL}/instances/{cleaned_id}/file",
-        auth=AUTH,
-        verify=False
-    )
+            if cleaned_id:
+                st.success(f"✅ Cleaned DICOM detected: {cleaned_id}")
 
-    st.download_button(
-        label="⬇️ Download Cleaned DICOM",
-        data=anon_file.content,
-        file_name="cleaned.dcm",
-        mime="application/dicom"
-    )
+                anon_file = requests.get(
+                    f"{ORTHANC_URL}/instances/{cleaned_id}/file",
+                    auth=AUTH,
+                    verify=False
+                )
+
+                st.download_button(
+                    label="⬇️ Download Cleaned DICOM",
+                    data=anon_file.content,
+                    file_name="cleaned.dcm",
+                    mime="application/dicom"
+                )
+
+                st.json({
+                    "Original ID": instance_id,
+                    "Cleaned ID": cleaned_id,
+                    "Time Difference (s)": round(timestamps[cleaned_id] - float(orig_meta.text), 2)
+                })
+
+            else:
+                st.warning("⚠️ No cleaned DICOM detected after timeout. Check container logs.")
+
+    except Exception as e:
+        st.error(f"⚠️ Invalid DICOM file: {e}")
+
 else:
-    st.warning("No cleaned DICOM detected after timeout.")
+    st.info("📥 Upload a DICOM file to begin.")
