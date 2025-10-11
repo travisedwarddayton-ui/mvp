@@ -18,22 +18,17 @@ st.write(
     "and displayed side-by-side for before/after comparison."
 )
 
+
 # ---------- Helper: render DICOM as image ----------
 def render_dicom(dicom_bytes):
     ds = pydicom.dcmread(io.BytesIO(dicom_bytes))
     arr = ds.pixel_array.astype(np.float32)
-
-    # Handle MONOCHROME1 inversion
     if getattr(ds, "PhotometricInterpretation", "") == "MONOCHROME1":
         arr = np.max(arr) - arr
-
-    # Normalize 0–255
     arr -= arr.min()
     if arr.max() > 0:
         arr /= arr.max()
     arr = (arr * 255).astype(np.uint8)
-
-    # Ensure RGB for Streamlit
     arr = np.squeeze(arr)
     if arr.ndim == 2:
         arr = np.stack([arr] * 3, axis=-1)
@@ -42,7 +37,7 @@ def render_dicom(dicom_bytes):
     return arr
 
 
-# ---------- Main workflow ----------
+# ---------- Upload & process ----------
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
 if uploaded_file:
@@ -57,7 +52,6 @@ if uploaded_file:
             "Has PixelData": hasattr(dataset, "PixelData")
         })
 
-        # --- Show BEFORE image immediately ---
         st.markdown("### 🩻 Original DICOM (Before Cleaning)")
         try:
             st.image(render_dicom(dicom_bytes), use_column_width=True, clamp=True)
@@ -82,8 +76,15 @@ if uploaded_file:
             instance_id = upload.json().get("ID")
             st.success(f"✅ Uploaded to Orthanc: {instance_id}")
 
+            # --- Get the original upload time ---
+            orig_meta = requests.get(
+                f"{ORTHANC_URL}/instances/{instance_id}/metadata/LastUpdate",
+                auth=AUTH, verify=False
+            )
+            orig_ts = float(orig_meta.text) if orig_meta.status_code == 200 else 0.0
+            st.write(f"🕒 Original instance timestamp: {orig_ts}")
+
             # --- Trigger cleaner ---
-            st.info("🧠 Triggering cleaner script...")
             lua_code = f'os.execute("/scripts/on_stored_instance.sh {instance_id} &")'
             trigger = requests.post(
                 f"{ORTHANC_URL}/tools/execute-script",
@@ -98,12 +99,11 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
-            # --- Wait for cleaned file ---
-            st.info("⏳ Waiting for cleaned DICOM to appear...")
+            # --- Poll Orthanc for new cleaned DICOM ---
+            st.info("⏳ Waiting for cleaned DICOM to appear (max 3 min)...")
+
             cleaned_id = None
             deadline = time.time() + 180
-            orig_meta = requests.get(f"{ORTHANC_URL}/instances/{instance_id}/metadata/LastUpdate", auth=AUTH, verify=False)
-            orig_ts = float(orig_meta.text) if orig_meta.status_code == 200 else 0.0
 
             while time.time() < deadline:
                 time.sleep(5)
@@ -111,22 +111,29 @@ if uploaded_file:
                 if resp.status_code != 200:
                     continue
 
-                timestamps = {}
-                for iid in resp.json():
-                    meta = requests.get(f"{ORTHANC_URL}/instances/{iid}/metadata/LastUpdate", auth=AUTH, verify=False)
+                ids = resp.json()
+                candidates = {}
+                for iid in ids:
+                    meta = requests.get(
+                        f"{ORTHANC_URL}/instances/{iid}/metadata/LastUpdate",
+                        auth=AUTH, verify=False
+                    )
                     if meta.status_code == 200:
                         try:
                             ts = float(meta.text)
                             if ts > orig_ts:
-                                timestamps[iid] = ts
+                                candidates[iid] = ts
                         except ValueError:
                             pass
 
-                if timestamps:
-                    cleaned_id = max(timestamps, key=timestamps.get)
+                if candidates:
+                    # Pick newest
+                    cleaned_id = max(candidates, key=candidates.get)
+                    st.write(f"🆕 Detected candidate cleaned file: {cleaned_id}")
                     break
 
-                st.write(f"⏱️ Checking for cleaned file... ({int(deadline - time.time())} s left)")
+                remaining = int(deadline - time.time())
+                st.write(f"⏱️ Checking for cleaned file... ({remaining}s left)")
 
             if not cleaned_id:
                 st.warning("⚠️ No cleaned DICOM detected after timeout.")
@@ -134,11 +141,13 @@ if uploaded_file:
 
             st.success(f"✅ Cleaned DICOM detected: {cleaned_id}")
 
-            # --- Download cleaned DICOM ---
-            anon_file = requests.get(f"{ORTHANC_URL}/instances/{cleaned_id}/file", auth=AUTH, verify=False)
+            # --- Download the cleaned DICOM ---
+            anon_file = requests.get(
+                f"{ORTHANC_URL}/instances/{cleaned_id}/file", auth=AUTH, verify=False
+            )
             cleaned_bytes = anon_file.content
 
-            # --- Side-by-side comparison ---
+            # --- Display side-by-side comparison ---
             st.markdown("## 🔍 Visual Comparison")
             col1, col2 = st.columns(2)
             with col1:
@@ -148,7 +157,7 @@ if uploaded_file:
                 st.markdown("### Cleaned")
                 st.image(render_dicom(cleaned_bytes), use_column_width=True, clamp=True)
 
-            # --- Download button ---
+            # --- Download cleaned DICOM ---
             st.download_button(
                 label="⬇️ Download Cleaned DICOM",
                 data=cleaned_bytes,
@@ -156,9 +165,11 @@ if uploaded_file:
                 mime="application/dicom"
             )
 
+            # --- Debug info ---
             st.json({
                 "Original ID": instance_id,
-                "Cleaned ID": cleaned_id
+                "Cleaned ID": cleaned_id,
+                "Original Timestamp": orig_ts
             })
 
     except Exception as e:
