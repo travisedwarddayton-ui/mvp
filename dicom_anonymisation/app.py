@@ -3,7 +3,6 @@ import requests
 from requests.auth import HTTPBasicAuth
 import pydicom
 import io
-import json
 import time
 
 # ===== CONFIG =====
@@ -31,10 +30,6 @@ if uploaded_file:
 
         if st.button("🚀 Upload & Clean"):
             st.info("📤 Uploading DICOM to Orthanc...")
-
-            # --- Record existing instance IDs before upload ---
-            pre_upload_resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
-            pre_existing_ids = set(pre_upload_resp.json()) if pre_upload_resp.status_code == 200 else set()
 
             # --- Upload new DICOM ---
             upload = requests.post(
@@ -71,46 +66,37 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
-            # --- Poll Orthanc for new anonymized image ---
+            # --- Poll Orthanc for cleaned DICOM ---
             st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
 
             cleaned_id = None
-            deadline = time.time() + 180  # wait up to 3 minutes
+            deadline = time.time() + 180  # 3 min timeout
 
             while time.time() < deadline:
                 time.sleep(5)
-                resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+                resp = requests.get(f"{ORTHANC_URL}/instances?expand", auth=AUTH, verify=False)
                 if resp.status_code != 200:
                     continue
-                
-                all_ids = resp.json()
-                # Filter out the original one
-                candidate_ids = [iid for iid in all_ids if iid != instance_id]
-                
-                # Query timestamps for each candidate
-                timestamps = {}
-                for iid in candidate_ids:
-                    meta = requests.get(f"{ORTHANC_URL}/instances/{iid}/metadata/LastUpdate", auth=AUTH, verify=False)
-                    if meta.status_code == 200:
-                        timestamps[iid] = float(meta.text)
 
-                        except ValueError:
-                            pass
+                instances = resp.json()
+
+                # Build dict of timestamps for all instances except the uploaded one
+                timestamps = {
+                    i["ID"]: i.get("LastUpdate", 0)
+                    for i in instances
+                    if i["ID"] != instance_id
+                }
 
                 if timestamps:
                     cleaned_id = max(timestamps, key=timestamps.get)
-                    # Double check it's newer than the uploaded one
-                    orig_meta = requests.get(f"{ORTHANC_URL}/instances/{instance_id}/metadata/LastUpdate", auth=AUTH, verify=False)
-                    if orig_meta.status_code == 200:
-                        try:
-                            if timestamps[cleaned_id] > float(orig_meta.text):
-                                break
-                        except ValueError:
-                            pass
+
+                    # Check if cleaned one is newer
+                    orig_meta = next((i for i in instances if i["ID"] == instance_id), None)
+                    orig_time = orig_meta.get("LastUpdate", 0) if orig_meta else 0
+                    if timestamps[cleaned_id] > orig_time:
+                        break
 
                 st.write(f"⏱️ Checking for new cleaned file... ({int(deadline - time.time())}s left)")
-
-            st.write(f"🕓 Checked {len(timestamps)} instances.")
 
             if cleaned_id:
                 st.success(f"✅ Cleaned DICOM detected: {cleaned_id}")
@@ -131,11 +117,9 @@ if uploaded_file:
                 st.json({
                     "Original ID": instance_id,
                     "Cleaned ID": cleaned_id,
-                    "Time Difference (s)": round(timestamps[cleaned_id] - float(orig_meta.text), 2)
                 })
-
             else:
-                st.warning("⚠️ No cleaned DICOM detected after timeout. Check container logs.")
+                st.warning("⚠️ No cleaned DICOM detected after timeout. Check logs.")
 
     except Exception as e:
         st.error(f"⚠️ Invalid DICOM file: {e}")
