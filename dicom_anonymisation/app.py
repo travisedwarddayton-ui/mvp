@@ -16,21 +16,35 @@ st.set_page_config(page_title="🩻 DICOM Cleaner", layout="wide")
 st.title("🩻 DICOM Cleaner (Orthanc + PaddleOCR)")
 st.write("Upload a DICOM file → it will be uploaded to Orthanc, cleaned using OCR anonymization, and displayed side-by-side for comparison.")
 
-uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
-
-# Helper: render DICOM pixel data safely
+# ======================================================
+# Helper: Convert DICOM pixel data to displayable image
+# ======================================================
 def render_dicom(dicom_bytes):
     ds = pydicom.dcmread(io.BytesIO(dicom_bytes))
     arr = ds.pixel_array.astype(np.float32)
+
+    # Handle MONOCHROME1 inversion
+    if hasattr(ds, "PhotometricInterpretation") and ds.PhotometricInterpretation == "MONOCHROME1":
+        arr = np.max(arr) - arr
+
+    # Normalize safely
     arr -= arr.min()
-    arr /= arr.max() if arr.max() != 0 else 1
+    if arr.max() != 0:
+        arr /= arr.max()
     arr = (arr * 255).astype(np.uint8)
+
+    # Squeeze and ensure shape
+    arr = np.squeeze(arr)
     if arr.ndim == 2:
-        return arr
-    elif arr.ndim == 3:
-        return arr[..., 0]
-    else:
-        raise ValueError("Unsupported DICOM shape")
+        arr = np.stack([arr]*3, axis=-1)
+    elif arr.ndim == 3 and arr.shape[-1] != 3:
+        arr = arr[..., 0:3]
+    return arr
+
+# ======================================================
+# Upload and clean logic
+# ======================================================
+uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
 if uploaded_file:
     try:
@@ -79,7 +93,7 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
-            # Wait for cleaned file
+            # Poll Orthanc for cleaned file
             st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
             cleaned_id = None
             deadline = time.time() + 180
@@ -129,14 +143,17 @@ if uploaded_file:
 
             with col1:
                 st.markdown("### Original DICOM")
-                st.image(render_dicom(dicom_bytes), clamp=True, use_column_width=True)
+                try:
+                    st.image(render_dicom(dicom_bytes), clamp=True, use_column_width=True)
+                except Exception as e:
+                    st.error(f"⚠️ Unable to render original image: {e}")
 
             with col2:
                 st.markdown("### Cleaned DICOM")
                 try:
                     st.image(render_dicom(cleaned_bytes), clamp=True, use_column_width=True)
                 except Exception as e:
-                    st.error(f"⚠️ Unable to visualize cleaned DICOM: {e}")
+                    st.error(f"⚠️ Unable to render cleaned image: {e}")
 
             # ---- Download cleaned file ----
             st.download_button(
