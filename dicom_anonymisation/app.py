@@ -82,17 +82,18 @@ if uploaded_file:
                 resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
                 if resp.status_code != 200:
                     continue
-
+                
                 all_ids = resp.json()
+                # Filter out the original one
                 candidate_ids = [iid for iid in all_ids if iid != instance_id]
-
+                
                 # Query timestamps for each candidate
                 timestamps = {}
                 for iid in candidate_ids:
                     meta = requests.get(f"{ORTHANC_URL}/instances/{iid}/metadata/LastUpdate", auth=AUTH, verify=False)
                     if meta.status_code == 200:
-                        try:
-                            timestamps[iid] = float(meta.text)
+                        timestamps[iid] = float(meta.text)
+
                         except ValueError:
                             pass
 
