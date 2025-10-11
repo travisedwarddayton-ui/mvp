@@ -4,6 +4,7 @@ from requests.auth import HTTPBasicAuth
 import pydicom
 import io
 import json
+import time
 
 # ===== CONFIG =====
 ORTHANC_URL = "https://mwyksr0jwqlfxm-8042.proxy.runpod.net"
@@ -11,8 +12,8 @@ AUTH = HTTPBasicAuth("orthanc", "orthanc")
 
 st.set_page_config(page_title="🩻 DICOM Anonymizer", layout="centered")
 
-st.title("🩻 DICOM Anonymizer (Hosted Version)")
-st.write("Upload a DICOM file — it will be validated locally and then sent securely to your Orthanc server.")
+st.title("🩻 DICOM Anonymizer (Orthanc Cleaner)")
+st.write("Upload a DICOM file — Orthanc will run the PaddleOCR cleaner and return a new anonymized version.")
 
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
@@ -21,97 +22,72 @@ if uploaded_file:
         dicom_bytes = uploaded_file.read()
         dataset = pydicom.dcmread(io.BytesIO(dicom_bytes), stop_before_pixels=False)
 
-        already_anon = getattr(dataset, "PatientIdentityRemoved", "").upper() == "YES"
-        has_pixels = hasattr(dataset, "PixelData")
-
         st.subheader("📋 Local DICOM Header Check")
         st.json({
-            "Already Anonymized": already_anon,
-            "Has Pixel Data": has_pixels,
             "Patient Name": str(getattr(dataset, "PatientName", "N/A")),
             "Modality": str(getattr(dataset, "Modality", "N/A")),
+            "Already Anonymized": getattr(dataset, "PatientIdentityRemoved", "").upper() == "YES",
         })
 
-        if already_anon:
-            st.warning("⚠️ Already anonymized — skipping upload.")
-        elif not has_pixels:
-            st.error("❌ No PixelData found — cannot anonymize.")
-        else:
-            st.success("✅ Valid DICOM — ready to upload.")
+        if st.button("🚀 Upload & Trigger Cleaning"):
+            st.info("Uploading to Orthanc...")
 
-            if st.button("🚀 Upload & Anonymize"):
-                st.info("Uploading to Orthanc... Please wait...")
+            upload = requests.post(
+                f"{ORTHANC_URL}/instances",
+                data=dicom_bytes,
+                headers={"Content-Type": "application/octet-stream"},
+                auth=AUTH,
+                timeout=60,
+                verify=False
+            )
 
-                try:
-                    upload = requests.post(
-                        f"{ORTHANC_URL}/instances",
-                        data=dicom_bytes,  # ✅ raw binary payload (matches your working curl)
-                        headers={"Content-Type": "application/octet-stream"},
-                        auth=AUTH,
-                        timeout=60,
-                        verify=False
-                    )
+            if upload.status_code != 200:
+                st.error(f"❌ Upload failed: {upload.text}")
+                st.stop()
 
-                    st.write(f"🔎 Upload status: {upload.status_code}")
-                    st.text("---- Raw Upload Response ----")
-                    st.text(upload.text)
+            upload_json = upload.json()
+            instance_id = upload_json.get("ID")
+            st.success(f"✅ Uploaded successfully! Instance ID: {instance_id}")
+            st.info("Waiting for Orthanc cleaner to generate the anonymized version...")
 
-                    try:
-                        upload_json = upload.json()
-                    except json.JSONDecodeError:
-                        st.error("❌ Unexpected upload response (not JSON)")
-                        st.text(upload.text)
-                        st.stop()
+            # === Wait for the new anonymized instance ===
+            existing_ids = set(
+                requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False).json()
+            )
 
-                    if upload.status_code == 200:
-                        instance_id = upload_json.get("ID")
-                        st.success(f"✅ Uploaded successfully — Instance ID: {instance_id}")
+            new_id = None
+            for _ in range(30):  # wait up to ~30s
+                time.sleep(2)
+                ids = set(
+                    requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False).json()
+                )
+                diff = ids - existing_ids
+                if diff:
+                    new_id = diff.pop()
+                    break
 
-                        # ---- Anonymize ----
-                        st.info("🔄 Anonymizing on Orthanc...")
+            if not new_id:
+                st.error("❌ Timeout: Cleaner did not upload a new instance in time.")
+                st.stop()
 
-                        anon = requests.post(
-                            f"{ORTHANC_URL}/instances/{instance_id}/anonymize",
-                            auth=AUTH,
-                            timeout=60,
-                            verify=False
-                        )
+            st.success(f"🎉 Cleaned version detected! ID: {new_id}")
 
-                        st.write(f"Anonymize status: {anon.status_code}")
-                        st.text("---- Raw Anonymize Response ----")
-                        st.text(anon.text)
+            anon_file = requests.get(
+                f"{ORTHANC_URL}/instances/{new_id}/file",
+                auth=AUTH,
+                timeout=60,
+                verify=False
+            )
 
-                        try:
-                            anon_json = anon.json()
-                        except json.JSONDecodeError:
-                            st.error("❌ Unexpected anonymize response (not JSON)")
-                            st.text(anon.text)
-                            st.stop()
-
-                        if anon.status_code == 200:
-                            anon_id = anon_json.get("ID")
-                            st.success(f"🎉 Anonymization complete! ID: {anon_id}")
-
-                            anon_file = requests.get(
-                                f"{ORTHANC_URL}/instances/{anon_id}/file",
-                                auth=AUTH,
-                                timeout=60,
-                                verify=False
-                            )
-
-                            st.download_button(
-                                label="⬇️ Download Anonymized DICOM",
-                                data=anon_file.content,
-                                file_name="anonymized.dcm",
-                                mime="application/dicom"
-                            )
-                        else:
-                            st.error(f"❌ Anonymization failed: {anon.text}")
-                    else:
-                        st.error(f"❌ Upload failed: {upload.text}")
-
-                except requests.exceptions.RequestException as e:
-                    st.error(f"🌐 Connection error: {e}")
+            if anon_file.status_code == 200:
+                st.download_button(
+                    label="⬇️ Download Cleaned DICOM",
+                    data=anon_file.content,
+                    file_name="cleaned.dcm",
+                    mime="application/dicom"
+                )
+            else:
+                st.error(f"❌ Failed to retrieve cleaned file: {anon_file.text}")
 
     except Exception as e:
         st.error(f"⚠️ Invalid DICOM file: {e}")
