@@ -53,7 +53,7 @@ if uploaded_file:
 
         st.markdown("### 🩻 Original DICOM (Before Cleaning)")
         try:
-            st.image(render_dicom(dicom_bytes), use_column_width=True, clamp=True)
+            st.image(render_dicom(dicom_bytes), use_container_width=True, clamp=True)
         except Exception as e:
             st.warning(f"⚠️ Couldn't render original image: {e}")
 
@@ -93,22 +93,29 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
-            # --- Poll for latest instance ---
-            st.info("⏳ Waiting for new cleaned DICOM to appear (max 3 min)...")
+            # --- Wait for the cleaner to write the last_cleaned_id.txt file ---
+            st.info("⏳ Waiting for the cleaner to finish (max 3 minutes)...")
             cleaned_id = None
             deadline = time.time() + 180
 
             while time.time() < deadline:
+                try:
+                    lua_get_id = 'local f = io.open("/tmp/last_cleaned_id.txt", "r"); if f then local id = f:read("*a"); f:close(); return id; end'
+                    resp = requests.post(
+                        f"{ORTHANC_URL}/tools/execute-script",
+                        auth=AUTH,
+                        data=lua_get_id,
+                        headers={"Content-Type": "text/plain"},
+                        verify=False
+                    )
+                    if resp.status_code == 200 and resp.text.strip():
+                        cleaned_id = resp.text.strip()
+                        st.success(f"🆕 Cleaned DICOM detected: {cleaned_id}")
+                        break
+                except Exception:
+                    pass
                 time.sleep(5)
-                resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
-                if resp.status_code == 200:
-                    ids = resp.json()
-                    if len(ids) > 1:
-                        # Always take the *last* instance (most recent)
-                        cleaned_id = ids[-1]
-                        if cleaned_id != instance_id:
-                            break
-                st.write(f"⏱️ Checking for cleaned file... ({int(deadline - time.time())}s left)")
+                st.write(f"⏱️ Checking cleaner output... ({int(deadline - time.time())}s left)")
 
             if not cleaned_id:
                 st.warning("⚠️ No cleaned DICOM detected after timeout.")
@@ -127,10 +134,10 @@ if uploaded_file:
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("### Original")
-                st.image(render_dicom(dicom_bytes), use_column_width=True, clamp=True)
+                st.image(render_dicom(dicom_bytes), use_container_width=True, clamp=True)
             with col2:
                 st.markdown("### Cleaned")
-                st.image(render_dicom(cleaned_bytes), use_column_width=True, clamp=True)
+                st.image(render_dicom(cleaned_bytes), use_container_width=True, clamp=True)
 
             # --- Download cleaned DICOM ---
             st.download_button(
