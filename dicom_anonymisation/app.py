@@ -74,41 +74,54 @@ if uploaded_file:
             # --- Poll Orthanc for new anonymized image ---
             st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
 
-            cleaned_id = None
-            for attempt in range(30):  # wait up to 150s
-                time.sleep(5)
-                resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
-                if resp.status_code == 200:
-                    current_ids = set(resp.json())
-                    new_ids = current_ids - pre_existing_ids
-                    if len(new_ids) > 1:
-                        # exclude the uploaded one, get the cleaned one
-                        new_ids.discard(instance_id)
-                    if new_ids:
-                        cleaned_id = list(new_ids)[0]
-                        break
-                st.write(f"⏱️ Checking... ({attempt + 1}/30)")
+           # --- Poll Orthanc for new anonymized image ---
+st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
 
-            if cleaned_id:
-                st.success(f"✅ Cleaned DICOM detected: {cleaned_id}")
+cleaned_id = None
+deadline = time.time() + 180  # wait up to 3 minutes
 
-                anon_file = requests.get(
-                    f"{ORTHANC_URL}/instances/{cleaned_id}/file",
-                    auth=AUTH,
-                    verify=False
-                )
+while time.time() < deadline:
+    time.sleep(5)
+    resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+    if resp.status_code != 200:
+        continue
 
-                st.download_button(
-                    label="⬇️ Download Cleaned DICOM",
-                    data=anon_file.content,
-                    file_name="cleaned.dcm",
-                    mime="application/dicom"
-                )
-            else:
-                st.warning("No cleaned DICOM detected after timeout.")
+    all_ids = resp.json()
+    # Filter out the original one
+    candidate_ids = [iid for iid in all_ids if iid != instance_id]
 
-    except Exception as e:
-        st.error(f"⚠️ Invalid DICOM file: {e}")
+    # Query timestamps for each candidate
+    timestamps = {}
+    for iid in candidate_ids:
+        meta = requests.get(f"{ORTHANC_URL}/instances/{iid}/metadata/LastUpdate", auth=AUTH, verify=False)
+        if meta.status_code == 200:
+            timestamps[iid] = float(meta.text)
+    
+    if timestamps:
+        # Pick most recently updated instance
+        cleaned_id = max(timestamps, key=timestamps.get)
+        # Double check it's newer than the uploaded one
+        orig_meta = requests.get(f"{ORTHANC_URL}/instances/{instance_id}/metadata/LastUpdate", auth=AUTH, verify=False)
+        if orig_meta.status_code == 200:
+            if timestamps[cleaned_id] > float(orig_meta.text):
+                break
 
+st.write(f"🕓 Checked up to {len(timestamps)} instances...")
+
+if cleaned_id:
+    st.success(f"✅ Cleaned DICOM detected: {cleaned_id}")
+
+    anon_file = requests.get(
+        f"{ORTHANC_URL}/instances/{cleaned_id}/file",
+        auth=AUTH,
+        verify=False
+    )
+
+    st.download_button(
+        label="⬇️ Download Cleaned DICOM",
+        data=anon_file.content,
+        file_name="cleaned.dcm",
+        mime="application/dicom"
+    )
 else:
-    st.info("📥 Upload a DICOM file to begin.")
+    st.warning("No cleaned DICOM detected after timeout.")
