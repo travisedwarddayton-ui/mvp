@@ -6,7 +6,6 @@ import io
 import json
 import time
 import numpy as np
-import cv2
 
 # ===== CONFIG =====
 ORTHANC_URL = "https://mwyksr0jwqlfxm-8042.proxy.runpod.net"
@@ -19,14 +18,19 @@ st.write("Upload a DICOM file → it will be uploaded to Orthanc, cleaned using 
 
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
-# Helper: render DICOM pixel data as image
+# Helper: render DICOM pixel data safely
 def render_dicom(dicom_bytes):
     ds = pydicom.dcmread(io.BytesIO(dicom_bytes))
-    pixel_array = ds.pixel_array.astype(np.float32)
-    img = cv2.normalize(pixel_array, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    if len(img.shape) == 2:
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
-    return img
+    arr = ds.pixel_array.astype(np.float32)
+    arr -= arr.min()
+    arr /= arr.max() if arr.max() != 0 else 1
+    arr = (arr * 255).astype(np.uint8)
+    if arr.ndim == 2:
+        return arr
+    elif arr.ndim == 3:
+        return arr[..., 0]
+    else:
+        raise ValueError("Unsupported DICOM shape")
 
 if uploaded_file:
     try:
@@ -43,7 +47,6 @@ if uploaded_file:
         if st.button("🚀 Upload, Clean & Compare"):
             st.info("📤 Uploading DICOM to Orthanc...")
 
-            # Upload to Orthanc
             upload = requests.post(
                 f"{ORTHANC_URL}/instances",
                 data=dicom_bytes,
@@ -118,22 +121,20 @@ if uploaded_file:
                 auth=AUTH,
                 verify=False
             )
-
             cleaned_bytes = anon_file.content
 
             # ---- Display Comparison ----
             st.markdown("## 🩻 Visual Comparison")
-
             col1, col2 = st.columns(2)
 
             with col1:
                 st.markdown("### Original DICOM")
-                st.image(render_dicom(dicom_bytes), use_column_width=True)
+                st.image(render_dicom(dicom_bytes), clamp=True, use_column_width=True)
 
             with col2:
                 st.markdown("### Cleaned DICOM")
                 try:
-                    st.image(render_dicom(cleaned_bytes), use_column_width=True)
+                    st.image(render_dicom(cleaned_bytes), clamp=True, use_column_width=True)
                 except Exception as e:
                     st.error(f"⚠️ Unable to visualize cleaned DICOM: {e}")
 
