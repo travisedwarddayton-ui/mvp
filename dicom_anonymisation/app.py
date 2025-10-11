@@ -3,33 +3,30 @@ import requests
 from requests.auth import HTTPBasicAuth
 import pydicom
 import io
+import json
 import time
-import matplotlib.pyplot as plt
+import numpy as np
+import cv2
 
 # ===== CONFIG =====
 ORTHANC_URL = "https://mwyksr0jwqlfxm-8042.proxy.runpod.net"
 AUTH = HTTPBasicAuth("orthanc", "orthanc")
 
-st.set_page_config(page_title="🩻 DICOM Cleaner", layout="centered")
+st.set_page_config(page_title="🩻 DICOM Cleaner", layout="wide")
 
 st.title("🩻 DICOM Cleaner (Orthanc + PaddleOCR)")
-st.write("Upload a DICOM file — it will be uploaded to Orthanc, cleaned using OCR anonymization, and ready for download.")
+st.write("Upload a DICOM file → it will be uploaded to Orthanc, cleaned using OCR anonymization, and displayed side-by-side for comparison.")
 
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
-def show_dicom_image(dicom_bytes, title):
-    """Helper to display a DICOM image."""
-    try:
-        ds = pydicom.dcmread(io.BytesIO(dicom_bytes))
-        if hasattr(ds, "pixel_array"):
-            img = ds.pixel_array
-            fig, ax = plt.subplots(figsize=(4, 4))
-            ax.imshow(img, cmap="gray")
-            ax.set_title(title)
-            ax.axis("off")
-            st.pyplot(fig)
-    except Exception:
-        st.warning(f"⚠️ Could not display {title}")
+# Helper: render DICOM pixel data as image
+def render_dicom(dicom_bytes):
+    ds = pydicom.dcmread(io.BytesIO(dicom_bytes))
+    pixel_array = ds.pixel_array.astype(np.float32)
+    img = cv2.normalize(pixel_array, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    if len(img.shape) == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    return img
 
 if uploaded_file:
     try:
@@ -43,12 +40,9 @@ if uploaded_file:
             "Has PixelData": hasattr(dataset, "PixelData")
         })
 
-        show_dicom_image(dicom_bytes, "Original DICOM")
+        if st.button("🚀 Upload, Clean & Compare"):
+            st.info("📤 Uploading DICOM to Orthanc...")
 
-        if st.button("🚀 Upload & Clean"):
-            progress = st.progress(0, text="Uploading to Orthanc...")
-
-            # --- Upload DICOM ---
             upload = requests.post(
                 f"{ORTHANC_URL}/instances",
                 data=dicom_bytes,
@@ -56,7 +50,6 @@ if uploaded_file:
                 auth=AUTH,
                 verify=False
             )
-            progress.progress(20, text="DICOM uploaded, triggering cleaner...")
 
             if upload.status_code != 200:
                 st.error(f"❌ Upload failed: {upload.text}")
@@ -67,6 +60,8 @@ if uploaded_file:
             st.success(f"✅ Uploaded to Orthanc: {instance_id}")
 
             # --- Trigger Cleaner ---
+            st.info("🧠 Running OCR anonymization on Orthanc instance...")
+
             lua_code = f'os.execute("/scripts/on_stored_instance.sh {instance_id} &")'
             trigger = requests.post(
                 f"{ORTHANC_URL}/tools/execute-script",
@@ -76,61 +71,79 @@ if uploaded_file:
                 verify=False,
                 timeout=10
             )
-            progress.progress(40, text="Cleaner script triggered...")
 
-            if trigger.status_code != 200:
+            if trigger.status_code == 200:
+                st.success("🎯 Cleaner script started in background!")
+            else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
             # --- Poll Orthanc for cleaned DICOM ---
+            st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
+
             cleaned_id = None
-            deadline = time.time() + 180  # 3 minutes
+            deadline = time.time() + 180
+            orig_meta = requests.get(f"{ORTHANC_URL}/instances/{instance_id}/metadata/LastUpdate", auth=AUTH, verify=False)
+            orig_ts = float(orig_meta.text) if orig_meta.status_code == 200 else 0.0
+
             while time.time() < deadline:
-                resp = requests.get(f"{ORTHANC_URL}/instances?expand", auth=AUTH, verify=False)
+                time.sleep(5)
+                resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
                 if resp.status_code != 200:
                     continue
-                instances = resp.json()
-                timestamps = {i["ID"]: i.get("LastUpdate", 0) for i in instances if i["ID"] != instance_id}
+
+                all_ids = resp.json()
+                timestamps = {}
+                for iid in all_ids:
+                    meta = requests.get(f"{ORTHANC_URL}/instances/{iid}/metadata/LastUpdate", auth=AUTH, verify=False)
+                    if meta.status_code == 200:
+                        try:
+                            ts = float(meta.text)
+                            if ts > orig_ts:
+                                timestamps[iid] = ts
+                        except ValueError:
+                            pass
+
                 if timestamps:
                     cleaned_id = max(timestamps, key=timestamps.get)
-                    orig = next((i for i in instances if i["ID"] == instance_id), None)
-                    if orig and timestamps[cleaned_id] > orig.get("LastUpdate", 0):
-                        break
-                remaining = int(deadline - time.time())
-                progress.progress(
-                    min(90, int(50 + (180 - remaining) / 2)),
-                    text=f"Waiting for cleaner to finish... ({remaining}s left)"
+                    break
+
+                st.write(f"⏱️ Checking for new cleaned file... ({int(deadline - time.time())}s left)")
+
+            if cleaned_id:
+                st.success(f"✅ Cleaned DICOM detected: {cleaned_id}")
+
+                # Download cleaned file
+                anon_file = requests.get(
+                    f"{ORTHANC_URL}/instances/{cleaned_id}/file",
+                    auth=AUTH,
+                    verify=False
                 )
-                time.sleep(5)
+                cleaned_bytes = anon_file.content
 
-            if not cleaned_id:
-                progress.empty()
-                st.warning("⚠️ No cleaned DICOM detected after timeout. Check logs.")
-                st.stop()
+                # Display side-by-side
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("### 🩻 Original DICOM")
+                    st.image(render_dicom(dicom_bytes), use_column_width=True)
+                with col2:
+                    st.markdown("### 🧼 Cleaned DICOM")
+                    st.image(render_dicom(cleaned_bytes), use_column_width=True)
 
-            progress.progress(100, text="✅ Cleaning complete!")
+                # Download button
+                st.download_button(
+                    label="⬇️ Download Cleaned DICOM",
+                    data=cleaned_bytes,
+                    file_name="cleaned.dcm",
+                    mime="application/dicom"
+                )
 
-            # --- Download cleaned DICOM ---
-            anon_file = requests.get(
-                f"{ORTHANC_URL}/instances/{cleaned_id}/file",
-                auth=AUTH,
-                verify=False
-            )
-
-            st.success(f"✅ Cleaned DICOM ready: {cleaned_id}")
-
-            show_dicom_image(anon_file.content, "Cleaned DICOM")
-
-            st.download_button(
-                label="⬇️ Download Cleaned DICOM",
-                data=anon_file.content,
-                file_name="cleaned.dcm",
-                mime="application/dicom"
-            )
-
-            st.json({
-                "Original ID": instance_id,
-                "Cleaned ID": cleaned_id
-            })
+                st.json({
+                    "Original ID": instance_id,
+                    "Cleaned ID": cleaned_id,
+                    "Time Difference (s)": round(timestamps[cleaned_id] - orig_ts, 2)
+                })
+            else:
+                st.warning("⚠️ No cleaned DICOM detected after timeout.")
 
     except Exception as e:
         st.error(f"⚠️ Invalid DICOM file: {e}")
