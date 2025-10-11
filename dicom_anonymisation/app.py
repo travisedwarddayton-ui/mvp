@@ -7,7 +7,7 @@ import time
 import numpy as np
 
 # ===== CONFIG =====
-ORTHANC_URL = "https://2x8g2wtjf1rkd8-8042.proxy.runpod.net"
+ORTHANC_URL = "https://pyr3wouqpxxey9-8042.proxy.runpod.net"
 AUTH = HTTPBasicAuth("orthanc", "orthanc")
 
 st.set_page_config(page_title="🩻 DICOM Cleaner", layout="wide")
