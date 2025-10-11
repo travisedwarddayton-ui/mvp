@@ -30,8 +30,13 @@ if uploaded_file:
         })
 
         if st.button("🚀 Upload & Clean"):
-            st.info("Uploading to Orthanc...")
+            st.info("📤 Uploading DICOM to Orthanc...")
 
+            # --- Record existing instance IDs before upload ---
+            pre_upload_resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+            pre_existing_ids = set(pre_upload_resp.json()) if pre_upload_resp.status_code == 200 else set()
+
+            # --- Upload new DICOM ---
             upload = requests.post(
                 f"{ORTHANC_URL}/instances",
                 data=dicom_bytes,
@@ -50,54 +55,60 @@ if uploaded_file:
 
             # --- Trigger Cleaner ---
             st.info("🧠 Running OCR anonymization on Orthanc instance...")
-            
+
             lua_code = f'os.execute("/scripts/on_stored_instance.sh {instance_id} &")'
-
-
             trigger = requests.post(
                 f"{ORTHANC_URL}/tools/execute-script",
                 auth=AUTH,
                 data=lua_code,
                 headers={"Content-Type": "text/plain"},
-                verify=False
+                verify=False,
+                timeout=10
             )
 
             if trigger.status_code == 200:
-                st.success("🎯 Cleaner script executed successfully!")
+                st.success("🎯 Cleaner script started in background!")
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
             # --- Poll Orthanc for new anonymized image ---
             st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
 
-            time.sleep(10)  # give Orthanc time to process
+            cleaned_id = None
+            for attempt in range(30):  # wait up to 150s
+                time.sleep(5)
+                resp = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+                if resp.status_code == 200:
+                    current_ids = set(resp.json())
+                    new_ids = current_ids - pre_existing_ids
+                    if len(new_ids) > 1:
+                        # exclude the uploaded one, get the cleaned one
+                        new_ids.discard(instance_id)
+                    if new_ids:
+                        cleaned_id = list(new_ids)[0]
+                        break
+                st.write(f"⏱️ Checking... ({attempt + 1}/30)")
 
-            instances = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
-            if instances.status_code == 200:
-                all_instances = instances.json()
-                if len(all_instances) > 1:
-                    latest_id = all_instances[-1]
-                    st.success(f"✅ Cleaned DICOM ready: {latest_id}")
+            if cleaned_id:
+                st.success(f"✅ Cleaned DICOM detected: {cleaned_id}")
 
-                    # Download the cleaned file
-                    anon_file = requests.get(
-                        f"{ORTHANC_URL}/instances/{latest_id}/file",
-                        auth=AUTH,
-                        verify=False
-                    )
+                anon_file = requests.get(
+                    f"{ORTHANC_URL}/instances/{cleaned_id}/file",
+                    auth=AUTH,
+                    verify=False
+                )
 
-                    st.download_button(
-                        label="⬇️ Download Cleaned DICOM",
-                        data=anon_file.content,
-                        file_name="cleaned.dcm",
-                        mime="application/dicom"
-                    )
-                else:
-                    st.warning("No new cleaned DICOM detected yet.")
+                st.download_button(
+                    label="⬇️ Download Cleaned DICOM",
+                    data=anon_file.content,
+                    file_name="cleaned.dcm",
+                    mime="application/dicom"
+                )
             else:
-                st.error("❌ Failed to list Orthanc instances")
+                st.warning("No cleaned DICOM detected after timeout.")
 
     except Exception as e:
         st.error(f"⚠️ Invalid DICOM file: {e}")
+
 else:
-    st.info("Upload a DICOM file to begin.")
+    st.info("📥 Upload a DICOM file to begin.")
