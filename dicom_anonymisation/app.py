@@ -10,10 +10,10 @@ import time
 ORTHANC_URL = "https://mwyksr0jwqlfxm-8042.proxy.runpod.net"
 AUTH = HTTPBasicAuth("orthanc", "orthanc")
 
-st.set_page_config(page_title="🩻 DICOM Anonymizer", layout="centered")
+st.set_page_config(page_title="🩻 DICOM Cleaner", layout="centered")
 
-st.title("🩻 DICOM Anonymizer (Orthanc Cleaner)")
-st.write("Upload a DICOM file — Orthanc will run the PaddleOCR cleaner and return a new anonymized version.")
+st.title("🩻 DICOM Cleaner (Orthanc + PaddleOCR)")
+st.write("Upload a DICOM file → it will be uploaded to Orthanc and automatically cleaned using OCR anonymization.")
 
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
@@ -22,14 +22,14 @@ if uploaded_file:
         dicom_bytes = uploaded_file.read()
         dataset = pydicom.dcmread(io.BytesIO(dicom_bytes), stop_before_pixels=False)
 
-        st.subheader("📋 Local DICOM Header Check")
+        st.subheader("📋 DICOM Header Info")
         st.json({
             "Patient Name": str(getattr(dataset, "PatientName", "N/A")),
             "Modality": str(getattr(dataset, "Modality", "N/A")),
-            "Already Anonymized": getattr(dataset, "PatientIdentityRemoved", "").upper() == "YES",
+            "Has PixelData": hasattr(dataset, "PixelData")
         })
 
-        if st.button("🚀 Upload & Trigger Cleaning"):
+        if st.button("🚀 Upload & Clean"):
             st.info("Uploading to Orthanc...")
 
             upload = requests.post(
@@ -37,7 +37,6 @@ if uploaded_file:
                 data=dicom_bytes,
                 headers={"Content-Type": "application/octet-stream"},
                 auth=AUTH,
-                timeout=60,
                 verify=False
             )
 
@@ -47,50 +46,57 @@ if uploaded_file:
 
             upload_json = upload.json()
             instance_id = upload_json.get("ID")
-            st.success(f"✅ Uploaded successfully! Instance ID: {instance_id}")
-            st.info("Waiting for Orthanc cleaner to generate the anonymized version...")
+            st.success(f"✅ Uploaded to Orthanc: {instance_id}")
 
-            # === Wait for the new anonymized instance ===
-            existing_ids = set(
-                requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False).json()
-            )
+            # --- Trigger Cleaner ---
+            st.info("🧠 Running OCR anonymization on Orthanc instance...")
 
-            new_id = None
-            for _ in range(30):  # wait up to ~30s
-                time.sleep(2)
-                ids = set(
-                    requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False).json()
-                )
-                diff = ids - existing_ids
-                if diff:
-                    new_id = diff.pop()
-                    break
-
-            if not new_id:
-                st.error("❌ Timeout: Cleaner did not upload a new instance in time.")
-                st.stop()
-
-            st.success(f"🎉 Cleaned version detected! ID: {new_id}")
-
-            anon_file = requests.get(
-                f"{ORTHANC_URL}/instances/{new_id}/file",
+            trigger = requests.post(
+                f"{ORTHANC_URL}/tools/execute-script",
                 auth=AUTH,
-                timeout=60,
+                json={
+                    "command": ["/scripts/on_stored_instance.sh", instance_id],
+                    "timeout": 600
+                },
                 verify=False
             )
 
-            if anon_file.status_code == 200:
-                st.download_button(
-                    label="⬇️ Download Cleaned DICOM",
-                    data=anon_file.content,
-                    file_name="cleaned.dcm",
-                    mime="application/dicom"
-                )
+            if trigger.status_code == 200:
+                st.success("🎯 Cleaner script executed successfully!")
             else:
-                st.error(f"❌ Failed to retrieve cleaned file: {anon_file.text}")
+                st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
+
+            # --- Poll Orthanc for new anonymized image ---
+            st.info("⏳ Waiting for cleaned DICOM to appear in Orthanc...")
+
+            time.sleep(10)  # give Orthanc time to process
+
+            instances = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+            if instances.status_code == 200:
+                all_instances = instances.json()
+                if len(all_instances) > 1:
+                    latest_id = all_instances[-1]
+                    st.success(f"✅ Cleaned DICOM ready: {latest_id}")
+
+                    # Download the cleaned file
+                    anon_file = requests.get(
+                        f"{ORTHANC_URL}/instances/{latest_id}/file",
+                        auth=AUTH,
+                        verify=False
+                    )
+
+                    st.download_button(
+                        label="⬇️ Download Cleaned DICOM",
+                        data=anon_file.content,
+                        file_name="cleaned.dcm",
+                        mime="application/dicom"
+                    )
+                else:
+                    st.warning("No new cleaned DICOM detected yet.")
+            else:
+                st.error("❌ Failed to list Orthanc instances")
 
     except Exception as e:
         st.error(f"⚠️ Invalid DICOM file: {e}")
-
 else:
-    st.info("Please upload a DICOM (.dcm) file to begin.")
+    st.info("Upload a DICOM file to begin.")
