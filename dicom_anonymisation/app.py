@@ -73,10 +73,23 @@ if uploaded_file:
             )
 
             if upload.status_code != 200:
-                st.error(f"❌ Upload failed: {upload.text}")
+                st.error(f"❌ Upload failed ({upload.status_code}): {upload.text[:500]}")
                 st.stop()
 
-            instance_id = upload.json().get("ID")
+            # --- Defensive JSON parsing ---
+            try:
+                upload_json = upload.json()
+            except Exception:
+                st.error(f"❌ Orthanc did not return valid JSON:\n\n{upload.text[:500]}")
+                st.stop()
+
+            instance_id = upload_json.get("ID")
+
+            if not instance_id:
+                st.error("❌ Upload succeeded but no 'ID' field in Orthanc response.")
+                st.write(upload_json)
+                st.stop()
+
             st.success(f"✅ Uploaded to Orthanc: {instance_id}")
 
             # --- Trigger Cleaner ---
@@ -114,10 +127,9 @@ if uploaded_file:
                         headers={"Content-Type": "text/plain"},
                         verify=False
                     )
-                    # Orthanc returns JSON if executed properly
                     if resp.status_code == 200 and resp.text.strip():
                         candidate_id = resp.text.strip().replace('"', '').strip()
-                        if candidate_id:
+                        if candidate_id and len(candidate_id) > 10:
                             cleaned_id = candidate_id
                             st.success(f"🆕 Cleaned DICOM detected: {cleaned_id}")
                             break
@@ -131,11 +143,17 @@ if uploaded_file:
                 st.stop()
 
             # --- Download cleaned DICOM ---
+            st.write(f"🔍 Fetching cleaned DICOM with ID: {cleaned_id}")
             anon_file = requests.get(
                 f"{ORTHANC_URL}/instances/{cleaned_id}/file",
                 auth=AUTH,
                 verify=False
             )
+
+            if anon_file.status_code != 200:
+                st.error(f"❌ Failed to fetch cleaned DICOM ({anon_file.status_code}): {anon_file.text[:500]}")
+                st.stop()
+
             cleaned_bytes = anon_file.content
 
             # --- Display comparison ---
