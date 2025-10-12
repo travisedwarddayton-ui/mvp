@@ -5,6 +5,7 @@ import pydicom
 import io
 import time
 import numpy as np
+import uuid
 
 # ===== CONFIG =====
 ORTHANC_URL = "https://pyr3wouqpxxey9-8042.proxy.runpod.net"
@@ -17,6 +18,7 @@ st.write(
     "Upload a DICOM file → It will be uploaded to Orthanc, cleaned using OCR anonymization, "
     "and displayed side-by-side for before/after comparison."
 )
+
 
 # ---------- Helper: render DICOM as image ----------
 def render_dicom(dicom_bytes):
@@ -37,6 +39,8 @@ def render_dicom(dicom_bytes):
 
 
 # ---------- Upload & process ----------
+correlation_id = str(uuid.uuid4())
+filename = f"cleanreq_{correlation_id}.dcm"
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
 if uploaded_file:
@@ -58,13 +62,12 @@ if uploaded_file:
             st.warning(f"⚠️ Couldn't render original image: {e}")
 
         if st.button("🚀 Upload, Clean & Compare"):
-            st.info("📤 Uploading DICOM to Orthanc...")
+            st.info(f"📤 Uploading {filename} to Orthanc...")
 
-            # --- Upload new DICOM ---
+            # --- Upload new DICOM with unique name ---
             upload = requests.post(
                 f"{ORTHANC_URL}/instances",
-                data=dicom_bytes,
-                headers={"Content-Type": "application/octet-stream"},
+                files={"file": (filename, dicom_bytes, "application/dicom")},
                 auth=AUTH,
                 verify=False
             )
@@ -93,14 +96,17 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
-            # --- Wait for the cleaner to write the last_cleaned_id.txt file ---
-            st.info("⏳ Waiting for the cleaner to finish (max 3 minutes)...")
+            # --- Wait for cleaner to write /tmp/last_cleaned_id.txt ---
+            st.info("⏳ Waiting for cleaner to finish (max 3 minutes)...")
             cleaned_id = None
             deadline = time.time() + 180
 
             while time.time() < deadline:
                 try:
-                    lua_get_id = 'local f = io.open("/tmp/last_cleaned_id.txt", "r"); if f then local id = f:read("*a"); f:close(); return id; end'
+                    lua_get_id = (
+                        'local f = io.open("/tmp/last_cleaned_id.txt", "r"); '
+                        'if f then local id = f:read("*a"); f:close(); return id; end'
+                    )
                     resp = requests.post(
                         f"{ORTHANC_URL}/tools/execute-script",
                         auth=AUTH,
@@ -108,10 +114,13 @@ if uploaded_file:
                         headers={"Content-Type": "text/plain"},
                         verify=False
                     )
+                    # Orthanc returns JSON if executed properly
                     if resp.status_code == 200 and resp.text.strip():
-                        cleaned_id = resp.text.strip()
-                        st.success(f"🆕 Cleaned DICOM detected: {cleaned_id}")
-                        break
+                        candidate_id = resp.text.strip().replace('"', '').strip()
+                        if candidate_id:
+                            cleaned_id = candidate_id
+                            st.success(f"🆕 Cleaned DICOM detected: {cleaned_id}")
+                            break
                 except Exception:
                     pass
                 time.sleep(5)
@@ -143,13 +152,14 @@ if uploaded_file:
             st.download_button(
                 label="⬇️ Download Cleaned DICOM",
                 data=cleaned_bytes,
-                file_name="cleaned.dcm",
+                file_name=f"cleaned_{correlation_id}.dcm",
                 mime="application/dicom"
             )
 
             st.json({
                 "Original ID": instance_id,
-                "Cleaned ID": cleaned_id
+                "Cleaned ID": cleaned_id,
+                "Uploaded Filename": filename
             })
 
     except Exception as e:
