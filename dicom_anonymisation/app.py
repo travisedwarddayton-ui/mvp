@@ -63,7 +63,7 @@ if uploaded_file:
         if st.button("🚀 Upload, Clean & Compare"):
             st.info(f"📤 Uploading {filename} to Orthanc...")
 
-            # --- Upload raw DICOM (reverted to binary mode) ---
+            # --- Upload raw DICOM ---
             upload = requests.post(
                 f"{ORTHANC_URL}/instances",
                 data=dicom_bytes,
@@ -76,7 +76,6 @@ if uploaded_file:
                 st.error(f"❌ Upload failed ({upload.status_code}): {upload.text[:500]}")
                 st.stop()
 
-            # --- Parse JSON safely ---
             try:
                 upload_json = upload.json()
             except Exception:
@@ -85,8 +84,7 @@ if uploaded_file:
 
             instance_id = upload_json.get("ID")
             if not instance_id:
-                st.error("❌ Upload succeeded but no 'ID' field in Orthanc response.")
-                st.write(upload_json)
+                st.error("❌ Upload succeeded but no 'ID' in Orthanc response.")
                 st.stop()
 
             st.success(f"✅ Uploaded to Orthanc: {instance_id}")
@@ -108,32 +106,26 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
-            # --- Wait for cleaner to write /tmp/last_cleaned_id.txt ---
+            # --- Wait for cleaner metadata update ---
             st.info("⏳ Waiting for cleaner to finish (max 3 minutes)...")
             cleaned_id = None
             deadline = time.time() + 180
 
             while time.time() < deadline:
                 try:
-                    lua_get_id = (
-                        'local f = io.open("/tmp/last_cleaned_id.txt", "r"); '
-                        'if f then local id = f:read("*a"); f:close(); return id; end'
-                    )
-                    resp = requests.post(
-                        f"{ORTHANC_URL}/tools/execute-script",
-                        auth=AUTH,
-                        data=lua_get_id,
-                        headers={"Content-Type": "text/plain"},
-                        verify=False
-                    )
+                    # Poll the Orthanc metadata set by cleaner
+                    meta_url = f"{ORTHANC_URL}/instances/{instance_id}/metadata/9999-cleaned-id"
+                    resp = requests.get(meta_url, auth=AUTH, verify=False)
+
                     if resp.status_code == 200 and resp.text.strip():
                         candidate_id = resp.text.strip().replace('"', '').strip()
-                        if candidate_id and len(candidate_id) > 10:
+                        if len(candidate_id) > 10:
                             cleaned_id = candidate_id
                             st.success(f"🆕 Cleaned DICOM detected: {cleaned_id}")
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    st.write(f"Error checking metadata: {e}")
+
                 time.sleep(5)
                 st.write(f"⏱️ Checking cleaner output... ({int(deadline - time.time())}s left)")
 
