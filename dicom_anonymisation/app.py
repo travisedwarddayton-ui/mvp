@@ -114,7 +114,10 @@ if uploaded_file:
             while time.time() < deadline:
                 try:
                     # Poll the Orthanc metadata set by cleaner
-                    meta_url = f"{ORTHANC_URL}/instances/{instance_id}/metadata/9999-cleaned-id"
+                    meta = requests.get(f"{ORTHANC_URL}/instances/{instance_id}", auth=AUTH, verify=False).json()
+                    study_id = meta.get("ParentStudy")
+                    meta_url = f"{ORTHANC_URL}/studies/{study_id}/metadata/9999-cleaned-id"
+
                     resp = requests.get(meta_url, auth=AUTH, verify=False)
 
                     if resp.status_code == 200 and resp.text.strip():
