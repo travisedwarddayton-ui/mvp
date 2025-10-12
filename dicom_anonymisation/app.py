@@ -3,9 +3,9 @@ import requests
 from requests.auth import HTTPBasicAuth
 import pydicom
 import io
-import time
 import numpy as np
 import uuid
+import time
 
 # ===== CONFIG =====
 ORTHANC_URL = "https://pyr3wouqpxxey9-8042.proxy.runpod.net"
@@ -38,8 +38,6 @@ def render_dicom(dicom_bytes):
 
 
 # ---------- Upload & process ----------
-correlation_id = str(uuid.uuid4())
-filename = f"cleanreq_{correlation_id}.dcm"
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
 
 if uploaded_file:
@@ -61,9 +59,12 @@ if uploaded_file:
             st.warning(f"⚠️ Couldn't render original image: {e}")
 
         if st.button("🚀 Upload, Clean & Compare"):
-            st.info(f"📤 Uploading {filename} to Orthanc...")
+            # --- Generate deterministic cleaned ID
+            cleaned_id = str(uuid.uuid4())
+            st.info(f"🆔 Assigned Cleaned ID: {cleaned_id}")
 
-            # --- Upload raw DICOM ---
+            # --- Upload DICOM to Orthanc
+            st.info("📤 Uploading DICOM to Orthanc...")
             upload = requests.post(
                 f"{ORTHANC_URL}/instances",
                 data=dicom_bytes,
@@ -84,14 +85,14 @@ if uploaded_file:
 
             instance_id = upload_json.get("ID")
             if not instance_id:
-                st.error("❌ Upload succeeded but no 'ID' in Orthanc response.")
+                st.error("❌ Upload succeeded but no 'ID' field in Orthanc response.")
                 st.stop()
 
             st.success(f"✅ Uploaded to Orthanc: {instance_id}")
 
-            # --- Trigger Cleaner ---
+            # --- Trigger Cleaner with --cleaned-id flag
             st.info("🧠 Running OCR anonymization on Orthanc instance...")
-            lua_code = f'os.execute("/scripts/on_stored_instance.sh {instance_id} &")'
+            lua_code = f'os.execute("/scripts/on_stored_instance.sh {instance_id} --cleaned-id {cleaned_id} &")'
             trigger = requests.post(
                 f"{ORTHANC_URL}/tools/execute-script",
                 auth=AUTH,
@@ -106,49 +107,37 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code})")
 
-            # --- Wait for cleaner metadata update ---
-            st.info("⏳ Waiting for cleaner to finish (max 3 minutes)...")
-            cleaned_id = None
-            deadline = time.time() + 180
+            # --- Wait briefly for Orthanc to ingest cleaned instance
+            st.info("⏳ Waiting for Orthanc to receive cleaned file...")
+            time.sleep(10)
 
-            while time.time() < deadline:
-                try:
-                    # Poll the Orthanc metadata set by cleaner
-                    meta = requests.get(f"{ORTHANC_URL}/instances/{instance_id}", auth=AUTH, verify=False).json()
-                    study_id = meta.get("ParentStudy")
-                    meta_url = f"{ORTHANC_URL}/studies/{study_id}/metadata/9999-cleaned-id"
-
-                    resp = requests.get(meta_url, auth=AUTH, verify=False)
-
-                    if resp.status_code == 200 and resp.text.strip():
-                        candidate_id = resp.text.strip().replace('"', '').strip()
-                        if len(candidate_id) > 10:
-                            cleaned_id = candidate_id
-                            st.success(f"🆕 Cleaned DICOM detected: {cleaned_id}")
-                            break
-                except Exception as e:
-                    st.write(f"Error checking metadata: {e}")
-
-                time.sleep(5)
-                st.write(f"⏱️ Checking cleaner output... ({int(deadline - time.time())}s left)")
-
-            if not cleaned_id:
-                st.warning("⚠️ No cleaned DICOM detected after timeout.")
-                st.stop()
-
-            # --- Download cleaned DICOM ---
-            st.write(f"🔍 Fetching cleaned DICOM with ID: {cleaned_id}")
+            # --- Fetch the cleaned DICOM directly
+            st.write(f"🔍 Fetching cleaned DICOM using known ID: {cleaned_id}")
             anon_file = requests.get(
                 f"{ORTHANC_URL}/instances/{cleaned_id}/file",
                 auth=AUTH,
                 verify=False
             )
 
+            # If not found yet, retry a few times
+            retries = 12
+            for i in range(retries):
+                if anon_file.status_code == 200:
+                    break
+                time.sleep(5)
+                st.write(f"⏱️ Waiting for cleaned instance... ({retries - i - 1}s left)")
+                anon_file = requests.get(
+                    f"{ORTHANC_URL}/instances/{cleaned_id}/file",
+                    auth=AUTH,
+                    verify=False
+                )
+
             if anon_file.status_code != 200:
-                st.error(f"❌ Failed to fetch cleaned DICOM ({anon_file.status_code}): {anon_file.text[:500]}")
+                st.error(f"❌ Cleaned file not found ({anon_file.status_code}): {anon_file.text[:200]}")
                 st.stop()
 
             cleaned_bytes = anon_file.content
+            st.success(f"✅ Cleaned DICOM retrieved successfully!")
 
             # --- Display comparison ---
             st.markdown("## 🔍 Visual Comparison")
@@ -164,14 +153,13 @@ if uploaded_file:
             st.download_button(
                 label="⬇️ Download Cleaned DICOM",
                 data=cleaned_bytes,
-                file_name=f"cleaned_{correlation_id}.dcm",
+                file_name=f"cleaned_{cleaned_id}.dcm",
                 mime="application/dicom"
             )
 
             st.json({
                 "Original ID": instance_id,
-                "Cleaned ID": cleaned_id,
-                "Uploaded Filename": filename
+                "Expected Cleaned ID": cleaned_id,
             })
 
     except Exception as e:
