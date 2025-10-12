@@ -19,7 +19,6 @@ st.write(
     "and displayed side-by-side for before/after comparison."
 )
 
-
 # ---------- Helper: render DICOM as image ----------
 def render_dicom(dicom_bytes):
     ds = pydicom.dcmread(io.BytesIO(dicom_bytes))
@@ -64,10 +63,11 @@ if uploaded_file:
         if st.button("🚀 Upload, Clean & Compare"):
             st.info(f"📤 Uploading {filename} to Orthanc...")
 
-            # --- Upload new DICOM with unique name ---
+            # --- Upload raw DICOM (reverted to binary mode) ---
             upload = requests.post(
                 f"{ORTHANC_URL}/instances",
-                files={"file": (filename, dicom_bytes, "application/dicom")},
+                data=dicom_bytes,
+                headers={"Content-Type": "application/dicom"},
                 auth=AUTH,
                 verify=False
             )
@@ -76,7 +76,7 @@ if uploaded_file:
                 st.error(f"❌ Upload failed ({upload.status_code}): {upload.text[:500]}")
                 st.stop()
 
-            # --- Defensive JSON parsing ---
+            # --- Parse JSON safely ---
             try:
                 upload_json = upload.json()
             except Exception:
@@ -84,7 +84,6 @@ if uploaded_file:
                 st.stop()
 
             instance_id = upload_json.get("ID")
-
             if not instance_id:
                 st.error("❌ Upload succeeded but no 'ID' field in Orthanc response.")
                 st.write(upload_json)
