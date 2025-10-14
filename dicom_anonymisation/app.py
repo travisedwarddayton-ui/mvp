@@ -5,7 +5,6 @@ import pydicom
 import io
 import numpy as np
 import time
-import json
 
 # ===== CONFIG =====
 ORTHANC_URL = "https://pyr3wouqpxxey9-8042.proxy.runpod.net"  # remote Orthanc
@@ -37,60 +36,36 @@ def render_dicom(dicom_bytes):
     return arr
 
 
-# ---------- Helper: robust discovery of cleaned DICOM ----------
-def orthanc_find_cleaned(original_instance_id, max_wait_seconds=120, poll_every=4):
+# ---------- Helper: find cleaned DICOM via metadata ----------
+def orthanc_find_cleaned(original_instance_id, max_wait_seconds=120, poll_every=5):
     """
-    Smart discovery of cleaned instance.
-    Step 1️⃣  Snapshot existing instances.
-    Step 2️⃣  Poll for new uploads.
-    Step 3️⃣  Verify SeriesDescription = CLEANED_FROM_<original_id>.
-    Step 4️⃣  Fallback to /tools/find for redundancy.
+    Poll Orthanc for the cleaned instance using metadata linkage.
+    The cleaner sets Metadata[1000] = <original_instance_id>.
     """
-    target_value = f"CLEANED_FROM_{original_instance_id}"
     deadline = time.time() + max_wait_seconds
-    known_instances = set()
-
-    try:
-        existing = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
-        if existing.status_code == 200:
-            known_instances = set(existing.json())
-    except Exception:
-        pass
+    st.write("🕵️ Looking for cleaned instance via Metadata[1000] linkage...")
 
     while time.time() < deadline:
-        # 1️⃣  Check for newly added instances
-        r = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
-        if r.status_code == 200:
-            all_instances = set(r.json())
-            new_candidates = list(all_instances - known_instances)
-
-            for inst_id in new_candidates[-20:]:  # check only the latest uploads
-                tags = requests.get(
-                    f"{ORTHANC_URL}/instances/{inst_id}/simplified-tags",
-                    auth=AUTH,
-                    verify=False
-                )
-                if tags.status_code == 200:
-                    series = tags.json().get("SeriesDescription", "")
-                    if target_value in series:
-                        st.info("🧩 Found cleaned instance via new upload list.")
-                        return inst_id
-
-        # 2️⃣  Fallback to /tools/find (sometimes Orthanc indexes slower)
-        payload = {
-            "Level": "Instance",
-            "Expand": False,
-            "Query": {"SeriesDescription": target_value}
-        }
-        r = requests.post(f"{ORTHANC_URL}/tools/find", auth=AUTH, json=payload, verify=False)
-        if r.status_code == 200:
-            try:
-                ids = r.json()
-                if ids:
-                    st.info("📜 Found cleaned instance via /tools/find.")
-                    return ids[0]
-            except Exception:
-                pass
+        try:
+            r = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+            if r.status_code == 200:
+                instance_ids = r.json()
+                for inst_id in instance_ids[-30:]:  # check only last 30 for performance
+                    meta = requests.get(f"{ORTHANC_URL}/instances/{inst_id}/metadata", auth=AUTH, verify=False)
+                    if meta.status_code == 200:
+                        meta_keys = meta.json()
+                        if "1000" in meta_keys:
+                            val_resp = requests.get(
+                                f"{ORTHANC_URL}/instances/{inst_id}/metadata/1000",
+                                auth=AUTH, verify=False
+                            )
+                            if val_resp.status_code == 200:
+                                val = val_resp.text.strip().strip('"')
+                                if val == original_instance_id:
+                                    st.info(f"🔗 Found cleaned instance via metadata: {inst_id}")
+                                    return inst_id
+        except Exception as e:
+            st.warning(f"⚠️ Metadata lookup error: {e}")
 
         time.sleep(poll_every)
 
@@ -132,12 +107,7 @@ if uploaded_file:
                 st.error(f"❌ Upload failed ({upload.status_code}): {upload.text[:500]}")
                 st.stop()
 
-            try:
-                upload_json = upload.json()
-            except Exception:
-                st.error(f"❌ Orthanc did not return valid JSON:\n\n{upload.text[:500]}")
-                st.stop()
-
+            upload_json = upload.json()
             instance_id = upload_json.get("ID")
             if not instance_id:
                 st.error("❌ Upload succeeded but no 'ID' field in Orthanc response.")
@@ -161,13 +131,13 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code}): {trigger.text[:300]}")
 
-            # --- Wait and poll Orthanc
-            st.info("⏳ Waiting for Orthanc to register the cleaned file...")
+            # --- Poll Orthanc for the cleaned instance
+            st.info("⏳ Waiting for cleaned instance to appear...")
             cleaned_instance_id = orthanc_find_cleaned(instance_id, max_wait_seconds=180, poll_every=5)
 
             if not cleaned_instance_id:
                 st.error("❌ Timed out waiting for cleaned instance. "
-                         "Ensure the cleaner sets SeriesDescription=CLEANED_FROM_<original_id>.")
+                         "Ensure the cleaner sets Metadata[1000]=<original_id>.")
                 st.stop()
 
             st.success(f"✅ Found cleaned instance: {cleaned_instance_id}")
