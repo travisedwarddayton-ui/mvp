@@ -37,56 +37,36 @@ def render_dicom(dicom_bytes):
     return arr
 
 
-# ---------- Helper: find cleaned DICOM via metadata or fallback ----------
+# ---------- Helper: find cleaned DICOM via SeriesDescription ----------
 def orthanc_find_cleaned(original_instance_id, max_wait_seconds=60, poll_every=3):
     """
-    Poll Orthanc for the cleaned instance.
-    Step 1: Iterate recent instances and check Metadata[1000] == original_instance_id
-    Step 2: Fallback to SeriesDescription == f"CLEANED_FROM_{original_instance_id}"
+    Poll Orthanc /tools/find for the cleaned instance using the SeriesDescription
+    that the cleaner writes:  CLEANED_FROM_<original_instance_id>
+    Returns the cleaned instance ID or None if not found within timeout.
     """
+    target_value = f"CLEANED_FROM_{original_instance_id}"
+    payload = {
+        "Level": "Instance",
+        "Expand": False,
+        "Query": {"SeriesDescription": target_value}
+    }
+
     deadline = time.time() + max_wait_seconds
-
     while time.time() < deadline:
-        try:
-            # --- Step 1: List instances ---
-            r = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
-            if r.status_code == 200:
-                instance_ids = r.json()
-
-                # Check metadata of each instance
-                for inst_id in instance_ids[-30:]:  # only check most recent 30 for speed
-                    meta = requests.get(f"{ORTHANC_URL}/instances/{inst_id}/metadata", auth=AUTH, verify=False)
-                    if meta.status_code == 200:
-                        meta_keys = meta.json()
-                        if "1000" in meta_keys:
-                            val_resp = requests.get(f"{ORTHANC_URL}/instances/{inst_id}/metadata/1000",
-                                                    auth=AUTH, verify=False)
-                            if val_resp.status_code == 200:
-                                val = val_resp.text.strip().strip('"')
-                                if val == original_instance_id:
-                                    st.info("🔗 Found cleaned instance via metadata linkage.")
-                                    return inst_id
-        except Exception as e:
-            st.warning(f"⚠️ Metadata lookup error: {e}")
-
-        # --- Step 2: Fallback to SeriesDescription ---
-        payload_series = {
-            "Level": "Instance",
-            "Expand": False,
-            "Query": {
-                "SeriesDescription": f"CLEANED_FROM_{original_instance_id}"
-            }
-        }
-        r = requests.post(f"{ORTHANC_URL}/tools/find", auth=AUTH, json=payload_series, verify=False)
+        r = requests.post(
+            f"{ORTHANC_URL}/tools/find",
+            auth=AUTH,
+            json=payload,
+            verify=False
+        )
         if r.status_code == 200:
             try:
-                ids = r.json()
+                ids = r.json()  # list of instance IDs
                 if ids:
-                    st.info("📜 Found cleaned instance via SeriesDescription fallback.")
+                    st.info("📜 Found cleaned instance via SeriesDescription.")
                     return ids[0]
             except Exception:
                 pass
-
         time.sleep(poll_every)
 
     return None
@@ -156,13 +136,16 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code}): {trigger.text[:300]}")
 
+            # Small settle delay so Orthanc indexes the new object
+            time.sleep(3)
+
             # --- Poll Orthanc to discover the new cleaned instance
             st.info("⏳ Waiting for cleaned instance to appear...")
             cleaned_instance_id = orthanc_find_cleaned(instance_id, max_wait_seconds=120, poll_every=4)
 
             if not cleaned_instance_id:
                 st.error("❌ Timed out waiting for cleaned instance. "
-                         "Ensure the cleaner sets Metadata[1000]=<original_id> or SeriesDescription=CLEANED_FROM_<original_id>.")
+                         "Ensure the cleaner sets SeriesDescription=CLEANED_FROM_<original_id>.")
                 st.stop()
 
             st.success(f"✅ Found cleaned instance: {cleaned_instance_id}")
