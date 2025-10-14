@@ -36,36 +36,57 @@ def render_dicom(dicom_bytes):
         arr = arr[..., :3]
     return arr
 
+
+# ---------- Helper: find cleaned DICOM via metadata or fallback ----------
 def orthanc_find_cleaned(original_instance_id, max_wait_seconds=60, poll_every=3):
     """
-    Poll Orthanc /tools/find for the cleaned instance by matching a tag the cleaner sets:
-    SeriesDescription == f"CLEANED_FROM_{original_instance_id}"
-    Returns the cleaned instance ID or None if not found within timeout.
+    Poll Orthanc /tools/find for the cleaned instance.
+    Priority 1: Search by Metadata[1000] == original_instance_id (set by cleaner)
+    Fallback:   Search by SeriesDescription == f"CLEANED_FROM_{original_instance_id}"
     """
-    target_value = f"CLEANED_FROM_{original_instance_id}"
-    payload = {
-        "Level": "Instance",
-        "Expand": False,
-        "Query": {
-            "SeriesDescription": target_value
-        }
-    }
     deadline = time.time() + max_wait_seconds
+
     while time.time() < deadline:
-        r = requests.post(f"{ORTHANC_URL}/tools/find",
-                          auth=AUTH,
-                          json=payload,
-                          verify=False)
+        # --- Try metadata-based lookup first ---
+        payload_meta = {
+            "Level": "Instance",
+            "Expand": False,
+            "Query": {
+                "Metadata": { "1000": original_instance_id }
+            }
+        }
+        r = requests.post(f"{ORTHANC_URL}/tools/find", auth=AUTH, json=payload_meta, verify=False)
         if r.status_code == 200:
             try:
-                ids = r.json()  # list of instance IDs
+                ids = r.json()
                 if ids:
-                    # Return the first match (you could refine by Series time if needed)
+                    st.info("🔗 Found cleaned instance via metadata linkage.")
                     return ids[0]
             except Exception:
                 pass
+
+        # --- Fallback to SeriesDescription (older cleaner versions) ---
+        payload_series = {
+            "Level": "Instance",
+            "Expand": False,
+            "Query": {
+                "SeriesDescription": f"CLEANED_FROM_{original_instance_id}"
+            }
+        }
+        r = requests.post(f"{ORTHANC_URL}/tools/find", auth=AUTH, json=payload_series, verify=False)
+        if r.status_code == 200:
+            try:
+                ids = r.json()
+                if ids:
+                    st.info("📜 Found cleaned instance via SeriesDescription fallback.")
+                    return ids[0]
+            except Exception:
+                pass
+
         time.sleep(poll_every)
+
     return None
+
 
 # ---------- Upload & process ----------
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
@@ -117,7 +138,6 @@ if uploaded_file:
 
             # --- Trigger cleaner on the remote node via Lua
             st.info("🧠 Running OCR anonymization on the remote Orthanc node...")
-            # IMPORTANT: your cleaner must set ds.SeriesDescription = f"CLEANED_FROM_{instance_id}"
             lua_code = f'os.execute("/scripts/clean_dicom_image_gpu.py {instance_id} &")'
             trigger = requests.post(
                 f"{ORTHANC_URL}/tools/execute-script",
@@ -132,13 +152,13 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code}): {trigger.text[:300]}")
 
-            # --- Poll Orthanc to discover the new cleaned instance by tag
+            # --- Poll Orthanc to discover the new cleaned instance
             st.info("⏳ Waiting for cleaned instance to appear...")
             cleaned_instance_id = orthanc_find_cleaned(instance_id, max_wait_seconds=120, poll_every=4)
 
             if not cleaned_instance_id:
                 st.error("❌ Timed out waiting for cleaned instance. "
-                         "Ensure the cleaner sets SeriesDescription=CLEANED_FROM_<original_id>.")
+                         "Ensure the cleaner sets Metadata[1000]=<original_id> or SeriesDescription=CLEANED_FROM_<original_id>.")
                 st.stop()
 
             st.success(f"✅ Found cleaned instance: {cleaned_instance_id}")
@@ -173,6 +193,7 @@ if uploaded_file:
                 mime="application/dicom"
             )
 
+            # --- Show IDs ---
             st.json({
                 "Original ID": instance_id,
                 "Cleaned ID": cleaned_instance_id
