@@ -40,32 +40,36 @@ def render_dicom(dicom_bytes):
 # ---------- Helper: find cleaned DICOM via metadata or fallback ----------
 def orthanc_find_cleaned(original_instance_id, max_wait_seconds=60, poll_every=3):
     """
-    Poll Orthanc /tools/find for the cleaned instance.
-    Priority 1: Search by Metadata[1000] == original_instance_id (set by cleaner)
-    Fallback:   Search by SeriesDescription == f"CLEANED_FROM_{original_instance_id}"
+    Poll Orthanc for the cleaned instance.
+    Step 1: Iterate recent instances and check Metadata[1000] == original_instance_id
+    Step 2: Fallback to SeriesDescription == f"CLEANED_FROM_{original_instance_id}"
     """
     deadline = time.time() + max_wait_seconds
 
     while time.time() < deadline:
-        # --- Try metadata-based lookup first ---
-        payload_meta = {
-            "Level": "Instance",
-            "Expand": False,
-            "Query": {
-                "Metadata": { "1000": original_instance_id }
-            }
-        }
-        r = requests.post(f"{ORTHANC_URL}/tools/find", auth=AUTH, json=payload_meta, verify=False)
-        if r.status_code == 200:
-            try:
-                ids = r.json()
-                if ids:
-                    st.info("🔗 Found cleaned instance via metadata linkage.")
-                    return ids[0]
-            except Exception:
-                pass
+        try:
+            # --- Step 1: List instances ---
+            r = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+            if r.status_code == 200:
+                instance_ids = r.json()
 
-        # --- Fallback to SeriesDescription (older cleaner versions) ---
+                # Check metadata of each instance
+                for inst_id in instance_ids[-30:]:  # only check most recent 30 for speed
+                    meta = requests.get(f"{ORTHANC_URL}/instances/{inst_id}/metadata", auth=AUTH, verify=False)
+                    if meta.status_code == 200:
+                        meta_keys = meta.json()
+                        if "1000" in meta_keys:
+                            val_resp = requests.get(f"{ORTHANC_URL}/instances/{inst_id}/metadata/1000",
+                                                    auth=AUTH, verify=False)
+                            if val_resp.status_code == 200:
+                                val = val_resp.text.strip().strip('"')
+                                if val == original_instance_id:
+                                    st.info("🔗 Found cleaned instance via metadata linkage.")
+                                    return inst_id
+        except Exception as e:
+            st.warning(f"⚠️ Metadata lookup error: {e}")
+
+        # --- Step 2: Fallback to SeriesDescription ---
         payload_series = {
             "Level": "Instance",
             "Expand": False,
