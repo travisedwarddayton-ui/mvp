@@ -4,21 +4,19 @@ from requests.auth import HTTPBasicAuth
 import pydicom
 import io
 import numpy as np
-import subprocess
+import time
 import json
-import os
-import tempfile
 
 # ===== CONFIG =====
-ORTHANC_URL = "http://127.0.0.1:8042"   # Orthanc is local inside container
+ORTHANC_URL = "https://pyr3wouqpxxey9-8042.proxy.runpod.net"  # remote Orthanc
 AUTH = HTTPBasicAuth("orthanc", "orthanc")
 
 st.set_page_config(page_title="🩻 DICOM Cleaner", layout="wide")
 
 st.title("🩻 DICOM Cleaner (Orthanc + PaddleOCR)")
 st.write(
-    "Upload a DICOM → it’s sent to Orthanc, cleaned via PaddleOCR anonymization, "
-    "and both versions are shown side-by-side."
+    "Upload a DICOM → it’s uploaded to remote Orthanc, a remote cleaner runs on that node, "
+    "and we fetch the cleaned file back from Orthanc."
 )
 
 # ---------- Helper: render DICOM as image ----------
@@ -37,6 +35,37 @@ def render_dicom(dicom_bytes):
     elif arr.ndim == 3 and arr.shape[-1] != 3:
         arr = arr[..., :3]
     return arr
+
+def orthanc_find_cleaned(original_instance_id, max_wait_seconds=60, poll_every=3):
+    """
+    Poll Orthanc /tools/find for the cleaned instance by matching a tag the cleaner sets:
+    SeriesDescription == f"CLEANED_FROM_{original_instance_id}"
+    Returns the cleaned instance ID or None if not found within timeout.
+    """
+    target_value = f"CLEANED_FROM_{original_instance_id}"
+    payload = {
+        "Level": "Instance",
+        "Expand": False,
+        "Query": {
+            "SeriesDescription": target_value
+        }
+    }
+    deadline = time.time() + max_wait_seconds
+    while time.time() < deadline:
+        r = requests.post(f"{ORTHANC_URL}/tools/find",
+                          auth=AUTH,
+                          json=payload,
+                          verify=False)
+        if r.status_code == 200:
+            try:
+                ids = r.json()  # list of instance IDs
+                if ids:
+                    # Return the first match (you could refine by Series time if needed)
+                    return ids[0]
+            except Exception:
+                pass
+        time.sleep(poll_every)
+    return None
 
 # ---------- Upload & process ----------
 uploaded_file = st.file_uploader("Choose a DICOM file", type=["dcm"])
@@ -60,6 +89,7 @@ if uploaded_file:
             st.warning(f"⚠️ Couldn't render original image: {e}")
 
         if st.button("🚀 Upload, Clean & Compare"):
+            # --- Upload to remote Orthanc
             st.info("📤 Uploading to Orthanc...")
             upload = requests.post(
                 f"{ORTHANC_URL}/instances",
@@ -68,55 +98,62 @@ if uploaded_file:
                 auth=AUTH,
                 verify=False
             )
-
             if upload.status_code != 200:
-                st.error(f"❌ Upload failed ({upload.status_code}): {upload.text[:300]}")
+                st.error(f"❌ Upload failed ({upload.status_code}): {upload.text[:500]}")
                 st.stop()
 
             try:
                 upload_json = upload.json()
-                instance_id = upload_json["ID"]
             except Exception:
-                st.error(f"❌ Invalid response from Orthanc:\n\n{upload.text[:500]}")
+                st.error(f"❌ Orthanc did not return valid JSON:\n\n{upload.text[:500]}")
                 st.stop()
 
-            st.success(f"✅ Uploaded to Orthanc — Instance ID: {instance_id}")
-            st.info("🧠 Running PaddleOCR Cleaner...")
-
-            # Run the cleaner script synchronously and capture its JSON output
-            try:
-                proc = subprocess.run(
-                    ["python3", "/scripts/clean_dicom_image_gpu.py", instance_id],
-                    capture_output=True,
-                    text=True,
-                    timeout=300
-                )
-            except subprocess.TimeoutExpired:
-                st.error("⏱️ Cleaner timed out after 5 minutes.")
+            instance_id = upload_json.get("ID")
+            if not instance_id:
+                st.error("❌ Upload succeeded but no 'ID' field in Orthanc response.")
                 st.stop()
 
-            if proc.returncode != 0:
-                st.error(f"Cleaner error:\n{proc.stderr or proc.stdout}")
+            st.success(f"✅ Uploaded to Orthanc: {instance_id}")
+
+            # --- Trigger cleaner on the remote node via Lua
+            st.info("🧠 Running OCR anonymization on the remote Orthanc node...")
+            # IMPORTANT: your cleaner must set ds.SeriesDescription = f"CLEANED_FROM_{instance_id}"
+            lua_code = f'os.execute("/scripts/clean_dicom_image_gpu.py {instance_id} &")'
+            trigger = requests.post(
+                f"{ORTHANC_URL}/tools/execute-script",
+                auth=AUTH,
+                data=lua_code,
+                headers={"Content-Type": "text/plain"},
+                verify=False,
+                timeout=10
+            )
+            if trigger.status_code == 200:
+                st.success("🎯 Cleaner script started in background!")
+            else:
+                st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code}): {trigger.text[:300]}")
+
+            # --- Poll Orthanc to discover the new cleaned instance by tag
+            st.info("⏳ Waiting for cleaned instance to appear...")
+            cleaned_instance_id = orthanc_find_cleaned(instance_id, max_wait_seconds=120, poll_every=4)
+
+            if not cleaned_instance_id:
+                st.error("❌ Timed out waiting for cleaned instance. "
+                         "Ensure the cleaner sets SeriesDescription=CLEANED_FROM_<original_id>.")
                 st.stop()
 
-            # Parse JSON output from cleaner
-            try:
-                result = json.loads(proc.stdout.strip().splitlines()[-1])
-            except Exception as e:
-                st.error(f"Failed to parse cleaner output:\n\n{proc.stdout}\n\nError: {e}")
+            st.success(f"✅ Found cleaned instance: {cleaned_instance_id}")
+
+            # --- Download the cleaned DICOM from Orthanc
+            anon_file = requests.get(
+                f"{ORTHANC_URL}/instances/{cleaned_instance_id}/file",
+                auth=AUTH,
+                verify=False
+            )
+            if anon_file.status_code != 200:
+                st.error(f"❌ Failed to download cleaned DICOM ({anon_file.status_code}): {anon_file.text[:300]}")
                 st.stop()
 
-            local_cleaned_path = result.get("local_cleaned_path")
-            orthanc_id = result.get("orthanc_id")
-            st.success("✅ Cleaner finished successfully!")
-
-            # Load cleaned bytes from the saved path
-            if not os.path.exists(local_cleaned_path):
-                st.error(f"Cleaned file not found at: {local_cleaned_path}")
-                st.stop()
-
-            with open(local_cleaned_path, "rb") as f:
-                cleaned_bytes = f.read()
+            cleaned_bytes = anon_file.content
 
             # --- Visual comparison ---
             st.markdown("## 🔍 Visual Comparison")
@@ -132,18 +169,17 @@ if uploaded_file:
             st.download_button(
                 label="⬇️ Download Cleaned DICOM",
                 data=cleaned_bytes,
-                file_name=os.path.basename(local_cleaned_path),
+                file_name=f"cleaned_{cleaned_instance_id}.dcm",
                 mime="application/dicom"
             )
 
-            # --- Summary info ---
             st.json({
-                "Original Orthanc ID": instance_id,
-                "New Orthanc ID": orthanc_id,
-                "Local Cleaned Path": local_cleaned_path
+                "Original ID": instance_id,
+                "Cleaned ID": cleaned_instance_id
             })
 
     except Exception as e:
         st.error(f"⚠️ Invalid DICOM file: {e}")
+
 else:
     st.info("📥 Upload a DICOM file to begin.")
