@@ -37,36 +37,61 @@ def render_dicom(dicom_bytes):
     return arr
 
 
-# ---------- Helper: find cleaned DICOM via SeriesDescription ----------
-def orthanc_find_cleaned(original_instance_id, max_wait_seconds=60, poll_every=3):
+# ---------- Helper: robust discovery of cleaned DICOM ----------
+def orthanc_find_cleaned(original_instance_id, max_wait_seconds=120, poll_every=4):
     """
-    Poll Orthanc /tools/find for the cleaned instance using the SeriesDescription
-    that the cleaner writes:  CLEANED_FROM_<original_instance_id>
-    Returns the cleaned instance ID or None if not found within timeout.
+    Smart discovery of cleaned instance.
+    Step 1️⃣  Snapshot existing instances.
+    Step 2️⃣  Poll for new uploads.
+    Step 3️⃣  Verify SeriesDescription = CLEANED_FROM_<original_id>.
+    Step 4️⃣  Fallback to /tools/find for redundancy.
     """
     target_value = f"CLEANED_FROM_{original_instance_id}"
-    payload = {
-        "Level": "Instance",
-        "Expand": False,
-        "Query": {"SeriesDescription": target_value}
-    }
-
     deadline = time.time() + max_wait_seconds
+    known_instances = set()
+
+    try:
+        existing = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+        if existing.status_code == 200:
+            known_instances = set(existing.json())
+    except Exception:
+        pass
+
     while time.time() < deadline:
-        r = requests.post(
-            f"{ORTHANC_URL}/tools/find",
-            auth=AUTH,
-            json=payload,
-            verify=False
-        )
+        # 1️⃣  Check for newly added instances
+        r = requests.get(f"{ORTHANC_URL}/instances", auth=AUTH, verify=False)
+        if r.status_code == 200:
+            all_instances = set(r.json())
+            new_candidates = list(all_instances - known_instances)
+
+            for inst_id in new_candidates[-20:]:  # check only the latest uploads
+                tags = requests.get(
+                    f"{ORTHANC_URL}/instances/{inst_id}/simplified-tags",
+                    auth=AUTH,
+                    verify=False
+                )
+                if tags.status_code == 200:
+                    series = tags.json().get("SeriesDescription", "")
+                    if target_value in series:
+                        st.info("🧩 Found cleaned instance via new upload list.")
+                        return inst_id
+
+        # 2️⃣  Fallback to /tools/find (sometimes Orthanc indexes slower)
+        payload = {
+            "Level": "Instance",
+            "Expand": False,
+            "Query": {"SeriesDescription": target_value}
+        }
+        r = requests.post(f"{ORTHANC_URL}/tools/find", auth=AUTH, json=payload, verify=False)
         if r.status_code == 200:
             try:
-                ids = r.json()  # list of instance IDs
+                ids = r.json()
                 if ids:
-                    st.info("📜 Found cleaned instance via SeriesDescription.")
+                    st.info("📜 Found cleaned instance via /tools/find.")
                     return ids[0]
             except Exception:
                 pass
+
         time.sleep(poll_every)
 
     return None
@@ -120,7 +145,7 @@ if uploaded_file:
 
             st.success(f"✅ Uploaded to Orthanc: {instance_id}")
 
-            # --- Trigger cleaner on the remote node via Lua
+            # --- Trigger cleaner
             st.info("🧠 Running OCR anonymization on the remote Orthanc node...")
             lua_code = f'os.execute("/scripts/clean_dicom_image_gpu.py {instance_id} &")'
             trigger = requests.post(
@@ -136,12 +161,9 @@ if uploaded_file:
             else:
                 st.warning(f"⚠️ Could not trigger cleaner via API ({trigger.status_code}): {trigger.text[:300]}")
 
-            # Small settle delay so Orthanc indexes the new object
-            time.sleep(3)
-
-            # --- Poll Orthanc to discover the new cleaned instance
-            st.info("⏳ Waiting for cleaned instance to appear...")
-            cleaned_instance_id = orthanc_find_cleaned(instance_id, max_wait_seconds=120, poll_every=4)
+            # --- Wait and poll Orthanc
+            st.info("⏳ Waiting for Orthanc to register the cleaned file...")
+            cleaned_instance_id = orthanc_find_cleaned(instance_id, max_wait_seconds=180, poll_every=5)
 
             if not cleaned_instance_id:
                 st.error("❌ Timed out waiting for cleaned instance. "
@@ -150,7 +172,7 @@ if uploaded_file:
 
             st.success(f"✅ Found cleaned instance: {cleaned_instance_id}")
 
-            # --- Download the cleaned DICOM from Orthanc
+            # --- Download cleaned DICOM
             anon_file = requests.get(
                 f"{ORTHANC_URL}/instances/{cleaned_instance_id}/file",
                 auth=AUTH,
