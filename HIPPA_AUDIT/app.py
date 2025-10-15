@@ -5,13 +5,14 @@ import math
 from datetime import date
 from io import StringIO
 import csv
+import json
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Data Readiness & Compliance Audit", layout="wide")
+st.set_page_config(page_title="HIPAA Risk & Data Readiness Audit", layout="wide")
 
-# ======================================================================
-# Schema (Executive Summary + Compliance Domains + Visual Summary)
-# ======================================================================
+# =========================
+# Schema (Executive + Domains + Visual)
+# =========================
 SCHEMA = {
     "current_state_summary": {
         "assessment_date": "2025-10-15",
@@ -43,7 +44,6 @@ SCHEMA = {
     },
 
     "compliance_domains": {
-        # 1) Administrative Safeguards
         "Administrative Safeguards (HIPAA §164.308)": {
             "weight": 0.15,
             "description": "Administrative controls covering risk analysis, workforce training, and vendor oversight.",
@@ -116,7 +116,6 @@ SCHEMA = {
             }
         },
 
-        # 2) Technical Safeguards
         "Technical Safeguards (HIPAA §164.312 & 21 CFR 11.10)": {
             "weight": 0.20,
             "description": "Access control, authentication, encryption, and audit trails for HIPAA and FDA Part 11.",
@@ -173,7 +172,6 @@ SCHEMA = {
             }
         },
 
-        # 3) Physical & Infrastructure Safeguards
         "Physical & Infrastructure Safeguards (HIPAA §164.310)": {
             "weight": 0.10,
             "description": "Facility, hardware, environment; availability and secure disposal of PHI media.",
@@ -216,7 +214,6 @@ SCHEMA = {
             }
         },
 
-        # 4) Data Integrity & Quality
         "Data Integrity & Quality (HIPAA §164.312(c)(1); 21 CFR 11.10(b))": {
             "weight": 0.15,
             "description": "Assures electronic records are accurate, complete, and protected from improper alteration or destruction.",
@@ -276,7 +273,6 @@ SCHEMA = {
             }
         },
 
-        # 5) Interoperability & Exchange
         "Interoperability & Electronic Exchange (21 CFR 11.30; ONC Cures Act)": {
             "weight": 0.10,
             "description": "Standardized, patient-accessible data exchange; API readiness and terminology normalization.",
@@ -318,7 +314,6 @@ SCHEMA = {
             }
         },
 
-        # 6) Electronic Signatures
         "Electronic Signatures & Attribution (21 CFR 11.100–11.200)": {
             "weight": 0.10,
             "description": "Non-repudiation and signer accountability for approvals, authorship, and reviews.",
@@ -357,10 +352,9 @@ SCHEMA = {
                         }
                     ]
                 }
-            ]
+            }
         },
 
-        # 7) Information Governance & Infonomics
         "Information Governance & Infonomics (Value of Data)": {
             "weight": 0.15,
             "description": "Translates compliance maturity into measurable ROI, reduced denials, and operational gains.",
@@ -398,7 +392,7 @@ SCHEMA = {
                         }
                     ]
                 }
-            ]
+            }
         }
     },
 
@@ -408,9 +402,9 @@ SCHEMA = {
     }
 }
 
-# ======================================================================
-# State and Helpers
-# ======================================================================
+# =========================
+# State
+# =========================
 def init_state():
     if "metric_flags" not in st.session_state:
         st.session_state.metric_flags = {}     # (domain, subdomain, metric) -> bool
@@ -423,8 +417,16 @@ def init_state():
     if "domain_costs" not in st.session_state:
         st.session_state.domain_costs = {}     # domain -> float
 
+init_state()
+
+# =========================
+# Helpers
+# =========================
 def money(n):
-    return "${:,.0f}".format(n)
+    try:
+        return "${:,.0f}".format(float(n))
+    except Exception:
+        return "$0"
 
 def calc_domain_score_and_cost(domain_name, domain_obj):
     # Mandatory coverage
@@ -478,20 +480,33 @@ def export_summary_csv(domain_scores, domain_costs, overall_score, overall_cost)
     writer.writerow(["OVERALL", f"{overall_score:.1f}", int(overall_cost)])
     return sio.getvalue()
 
+def export_state_json(schema_obj, domain_scores, domain_costs, overall_score, overall_cost):
+    payload = {
+        "schema_version": "1.0",
+        "current_state_summary": schema_obj["current_state_summary"],
+        "scores": domain_scores,
+        "costs": domain_costs,
+        "overall": {
+            "readiness_index": overall_score,
+            "estimated_exposure_usd": overall_cost
+        }
+    }
+    return json.dumps(payload, indent=2, default=str)
+
 def radar_chart(domain_scores):
     labels = list(domain_scores.keys())
     values = [max(0.0, min(100.0, domain_scores.get(d, 0.0))) for d in labels]
 
     N = len(labels)
     if N == 0:
-        fig = plt.figure(figsize=(6,6))
+        fig = plt.figure(figsize=(6, 6))
         return fig
 
     angles = [n / float(N) * 2 * math.pi for n in range(N)]
     angles += angles[:1]
     values += values[:1]
 
-    fig = plt.figure(figsize=(7,7))
+    fig = plt.figure(figsize=(7, 7))
     ax = plt.subplot(111, polar=True)
     ax.set_theta_offset(math.pi / 2)
     ax.set_theta_direction(-1)
@@ -508,12 +523,10 @@ def radar_chart(domain_scores):
     ax.fill(angles, values, alpha=0.1)
     return fig
 
-init_state()
-
-# ======================================================================
-# UI — Current State Summary
-# ======================================================================
-st.title("Data Readiness & Compliance Audit (HIPAA + 21 CFR Part 11)")
+# =========================
+# UI: Header and Summary
+# =========================
+st.title("HIPAA Security Risk & Data Readiness Audit")
 
 css = SCHEMA["current_state_summary"]
 c1, c2, c3, c4 = st.columns(4)
@@ -522,16 +535,18 @@ c2.metric("Organization", css["organization"])
 c3.metric("Total Records", f"{css['total_records']:,}")
 c4.metric("Estimated Exposure", money(css["estimated_total_exposure_usd"]))
 
+st.subheader("Data Sources")
 ds_cols = st.columns(len(css["data_sources"]))
 for i, ds in enumerate(css["data_sources"]):
     with ds_cols[i]:
-        st.subheader(ds["name"])
+        st.write(f"Name: {ds['name']}")
         st.write(f"Records: {ds['records']:,}")
         st.write(f"Systems: {ds['systems']}")
 
-vcols = st.columns(7)
+st.subheader("Violations by Category")
+vcat_cols = st.columns(7)
 for (i, (k, v)) in enumerate(css["violations_by_category"].items()):
-    with vcols[i]:
+    with vcat_cols[i]:
         st.metric(k, v)
 
 st.subheader("Top Risks")
@@ -540,9 +555,9 @@ for r in css["top_risks"]:
 
 st.markdown("---")
 
-# ======================================================================
-# UI — Domains
-# ======================================================================
+# =========================
+# UI: Domains
+# =========================
 overall_cost = 0
 overall_weighted_score = 0
 overall_weight_sum = 0
@@ -628,9 +643,9 @@ for domain_name, domain in SCHEMA["compliance_domains"].items():
 
 st.markdown("---")
 
-# ======================================================================
-# UI — Overall Summary and Export
-# ======================================================================
+# =========================
+# UI: Overall Summary and Export
+# =========================
 overall_score = (overall_weighted_score / overall_weight_sum) if overall_weight_sum else 0.0
 
 oc1, oc2, oc3, oc4 = st.columns(4)
@@ -640,20 +655,18 @@ oc3.metric("Domains", len(SCHEMA["compliance_domains"]))
 oc4.metric("Assessment Date", SCHEMA["current_state_summary"]["assessment_date"])
 
 csv_payload = export_summary_csv(st.session_state.domain_scores, st.session_state.domain_costs, overall_score, overall_cost)
-st.download_button(
-    "Download Summary CSV",
-    data=csv_payload,
-    file_name="readiness_summary.csv",
-    mime="text/csv"
-)
+st.download_button("Download Summary CSV", data=csv_payload, file_name="readiness_summary.csv", mime="text/csv")
+
+json_payload = export_state_json(SCHEMA, st.session_state.domain_scores, st.session_state.domain_costs, overall_score, overall_cost)
+st.download_button("Download JSON Report", data=json_payload, file_name="readiness_report.json", mime="application/json")
 
 st.markdown("---")
 
-# ======================================================================
-# UI — Spider Web Diagram
-# ======================================================================
+# =========================
+# UI: Spider Web Diagram
+# =========================
 st.header("Spider Web Diagram — Compliance Readiness by Domain")
 fig = radar_chart(st.session_state.domain_scores)
 st.pyplot(fig)
 
-st.caption("Scoring = weighted average across subdomain indicators times mandatory-column coverage. Estimated exposure = penalties for unmet metrics plus violation-costs for missing mandatory columns.")
+st.caption("Scoring = weighted average across subdomain indicators multiplied by mandatory-column coverage. Estimated exposure = penalties for unmet metrics plus violation-costs for missing mandatory columns.")
