@@ -33,13 +33,11 @@ import psycopg2
 from psycopg2.extras import Json
 
 def insert_into_postgres(data, pdf_file):
-    """Insert parsed JSON + PDF into raw.itv_reports table."""
     conn = get_connection()
     cur = conn.cursor()
     matricula = data["vehicle"]["matricula"]
     csv_code = data["report"]["csv_code"]
 
-    # Ensure schema and table exist
     cur.execute("""
         CREATE SCHEMA IF NOT EXISTS raw;
         CREATE TABLE IF NOT EXISTS raw.itv_reports (
@@ -57,12 +55,10 @@ def insert_into_postgres(data, pdf_file):
         );
     """)
 
-    # Read PDF bytes
     pdf_bytes = pdf_file.getvalue()
     pdf_name = pdf_file.name
     pdf_size = len(pdf_bytes)
 
-    # Insert JSON + PDF
     cur.execute("""
         INSERT INTO raw.itv_reports (
             matricula, csv_code, data,
