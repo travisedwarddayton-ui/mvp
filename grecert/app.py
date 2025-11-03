@@ -29,13 +29,17 @@ DB_CONFIG = {
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)
 
-def insert_into_postgres(data):
-    """Insert parsed JSON into raw.itv_reports table."""
+import psycopg2
+from psycopg2.extras import Json
+
+def insert_into_postgres(data, pdf_file):
+    """Insert parsed JSON + PDF into raw.itv_reports table."""
     conn = get_connection()
     cur = conn.cursor()
     matricula = data["vehicle"]["matricula"]
     csv_code = data["report"]["csv_code"]
 
+    # Ensure schema and table exist
     cur.execute("""
         CREATE SCHEMA IF NOT EXISTS raw;
         CREATE TABLE IF NOT EXISTS raw.itv_reports (
@@ -43,19 +47,42 @@ def insert_into_postgres(data):
             matricula VARCHAR(20),
             csv_code VARCHAR(50),
             data JSONB NOT NULL,
-            upload_time TIMESTAMP DEFAULT now()
+            pdf_file BYTEA,
+            pdf_filename TEXT,
+            pdf_filesize INT,
+            upload_time TIMESTAMP DEFAULT now(),
+            validation_status TEXT DEFAULT 'parsed',
+            source_type TEXT DEFAULT 'itv_pdf',
+            refined_status TEXT DEFAULT 'pending'
         );
     """)
 
+    # Read PDF bytes
+    pdf_bytes = pdf_file.getvalue()
+    pdf_name = pdf_file.name
+    pdf_size = len(pdf_bytes)
+
+    # Insert JSON + PDF
     cur.execute("""
-        INSERT INTO raw.itv_reports (matricula, csv_code, data)
-        VALUES (%s, %s, %s)
+        INSERT INTO raw.itv_reports (
+            matricula, csv_code, data,
+            pdf_file, pdf_filename, pdf_filesize
+        )
+        VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT DO NOTHING;
-    """, (matricula, csv_code, Json(data)))
+    """, (
+        matricula,
+        csv_code,
+        Json(data),
+        psycopg2.Binary(pdf_bytes),
+        pdf_name,
+        pdf_size
+    ))
 
     conn.commit()
     cur.close()
     conn.close()
+
 
 # ----------------------------------------------------------
 # HELPERS
