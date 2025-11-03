@@ -3,3 +3,7 @@ matplotlib
 fpdf2
 graphviz
 pydicom
+streamlit
+pdfplumber
+regex
+requests
