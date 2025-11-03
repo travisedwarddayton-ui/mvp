@@ -2,6 +2,8 @@ import streamlit as st
 import pdfplumber
 import re
 import json
+import psycopg2
+from psycopg2.extras import Json
 from datetime import datetime
 
 # ----------------------------------------------------------
@@ -10,6 +12,50 @@ from datetime import datetime
 st.set_page_config(page_title="Grecert ITV Parser", layout="wide")
 st.title("🚌 Grecert – ITV Report Parser")
 st.caption("Upload a DGT ITV report PDF. The parser will extract all required CAE fields for verification.")
+
+# ----------------------------------------------------------
+# DATABASE CONNECTION (Timescale / PostgreSQL)
+# ----------------------------------------------------------
+DB_CONFIG = {
+    "host": "x7un87aw1e.lkb3b7qxlu.tsdb.cloud.timescale.com",
+    "port": 38596,
+    "dbname": "tsdb",
+    "user": "tsdbadmin",
+    "password": "vtlpa7cyzdzjgdqb",
+    "sslmode": "require"
+}
+
+@st.cache_resource
+def get_connection():
+    return psycopg2.connect(**DB_CONFIG)
+
+def insert_into_postgres(data):
+    """Insert parsed JSON into raw.itv_reports table."""
+    conn = get_connection()
+    cur = conn.cursor()
+    matricula = data["vehicle"]["matricula"]
+    csv_code = data["report"]["csv_code"]
+
+    cur.execute("""
+        CREATE SCHEMA IF NOT EXISTS raw;
+        CREATE TABLE IF NOT EXISTS raw.itv_reports (
+            id SERIAL PRIMARY KEY,
+            matricula VARCHAR(20),
+            csv_code VARCHAR(50),
+            data JSONB NOT NULL,
+            upload_time TIMESTAMP DEFAULT now()
+        );
+    """)
+
+    cur.execute("""
+        INSERT INTO raw.itv_reports (matricula, csv_code, data)
+        VALUES (%s, %s, %s)
+        ON CONFLICT DO NOTHING;
+    """, (matricula, csv_code, Json(data)))
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 # ----------------------------------------------------------
 # HELPERS
@@ -60,7 +106,7 @@ if pdf_file:
         )
 
     # ------------------------------------------------------
-    # ITV HISTORY (MULTILINE, FAVORABLE CON, CLEAN END TEXT)
+    # ITV HISTORY
     # ------------------------------------------------------
     itv_pattern = (
         r"(\d{2}/\d{2}/\d{4})\s+"
@@ -72,9 +118,7 @@ if pdf_file:
     itv_entries = []
     for m in re.finditer(itv_pattern, text, re.DOTALL):
         defectos = " ".join(m.group(6).split())
-        #defectos = re.split(r"El presente documento|MINISTERIO", defectos)[0].strip()
         defectos = re.split(r"El presente documento|MINISTERIO|HISTORIAL DE LECTURAS", defectos)[0].strip()
-
         itv_entries.append({
             "fecha_itv": normalize_date(m.group(1)),
             "fecha_caducidad": normalize_date(m.group(2)),
@@ -88,10 +132,7 @@ if pdf_file:
     # ODOMETER HISTORY
     # ------------------------------------------------------
     odo_matches = re.findall(r"(\d{2}/\d{2}/\d{4})\s+([\d\.]+)\s+Estación ITV", text)
-    odometer = [
-        {"fecha": normalize_date(d), "km": int(k.replace(".", ""))}
-        for d, k in odo_matches
-    ]
+    odometer = [{"fecha": normalize_date(d), "km": int(k.replace(".", ""))} for d, k in odo_matches]
 
     # ------------------------------------------------------
     # TECHNICAL DATA
@@ -120,8 +161,7 @@ if pdf_file:
     # ------------------------------------------------------
     baja_match = re.search(
         r"de baja del\s*(\d{2}/\d{2}/\d{4})\s*hasta el\s*(\d{2}/\d{2}/\d{4})",
-        text,
-        re.IGNORECASE,
+        text, re.IGNORECASE,
     )
     baja_info = (
         {"inicio": normalize_date(baja_match.group(1)), "fin": normalize_date(baja_match.group(2))}
@@ -187,6 +227,13 @@ if pdf_file:
         st.warning(f"⚠️ Missing required fields: {', '.join(missing)}")
     else:
         st.success("✅ All mandatory fields captured successfully!")
+
+        # Store into PostgreSQL
+        try:
+            insert_into_postgres(data)
+            st.success("✅ Successfully saved to PostgreSQL (raw.itv_reports)")
+        except Exception as e:
+            st.error(f"Database insert failed: {e}")
 
     # ------------------------------------------------------
     # DOWNLOAD JSON
