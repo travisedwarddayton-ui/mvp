@@ -14,7 +14,7 @@ st.title("🚌 Grecert – ITV Report Parser")
 st.caption("Upload a DGT ITV report PDF. The parser will extract all required CAE fields for verification.")
 
 # ----------------------------------------------------------
-# DATABASE CONNECTION
+# DATABASE CONNECTION (Timescale / PostgreSQL)
 # ----------------------------------------------------------
 DB_CONFIG = {
     "host": "x7un87aw1e.lkb3b7qxlu.tsdb.cloud.timescale.com",
@@ -25,57 +25,66 @@ DB_CONFIG = {
     "sslmode": "require"
 }
 
-@st.cache_resource
 def get_connection():
+    """Always return a fresh connection."""
     return psycopg2.connect(**DB_CONFIG)
 
 
 def insert_into_postgres(data, pdf_file):
     """Insert parsed JSON + PDF into raw.itv_reports."""
-    conn = get_connection()
-    cur = conn.cursor()
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
 
-    # Ensure schema & table exist
-    cur.execute("""
-        CREATE SCHEMA IF NOT EXISTS raw;
-        CREATE TABLE IF NOT EXISTS raw.itv_reports (
-            id SERIAL PRIMARY KEY,
-            matricula VARCHAR(20),
-            csv_code VARCHAR(50),
-            data JSONB NOT NULL,
-            pdf_file BYTEA,
-            pdf_filename TEXT,
-            pdf_filesize INT,
-            upload_time TIMESTAMP DEFAULT now(),
-            validation_status TEXT DEFAULT 'parsed',
-            source_type TEXT DEFAULT 'itv_pdf',
-            refined_status TEXT DEFAULT 'pending'
-        );
-    """)
+        # Ensure schema & table exist
+        cur.execute("""
+            CREATE SCHEMA IF NOT EXISTS raw;
+            CREATE TABLE IF NOT EXISTS raw.itv_reports (
+                id SERIAL PRIMARY KEY,
+                matricula VARCHAR(20),
+                csv_code VARCHAR(50),
+                data JSONB NOT NULL,
+                pdf_file BYTEA,
+                pdf_filename TEXT,
+                pdf_filesize INT,
+                upload_time TIMESTAMP DEFAULT now(),
+                validation_status TEXT DEFAULT 'parsed',
+                source_type TEXT DEFAULT 'itv_pdf',
+                refined_status TEXT DEFAULT 'pending'
+            );
+        """)
 
-    matricula = data["vehicle"]["matricula"]
-    csv_code = data["report"]["csv_code"]
+        matricula = data["vehicle"]["matricula"]
+        csv_code = data["report"]["csv_code"]
 
-    pdf_bytes = pdf_file.getvalue()
-    pdf_name = pdf_file.name
-    pdf_size = len(pdf_bytes)
+        pdf_bytes = pdf_file.getvalue()
+        pdf_name = pdf_file.name
+        pdf_size = len(pdf_bytes)
 
-    cur.execute("""
-        INSERT INTO raw.itv_reports (
-            matricula, csv_code, data,
-            pdf_file, pdf_filename, pdf_filesize
-        )
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT DO NOTHING;
-    """, (
-        matricula, csv_code, Json(data),
-        psycopg2.Binary(pdf_bytes),
-        pdf_name, pdf_size
-    ))
+        cur.execute("""
+            INSERT INTO raw.itv_reports (
+                matricula, csv_code, data,
+                pdf_file, pdf_filename, pdf_filesize
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING;
+        """, (
+            matricula,
+            csv_code,
+            Json(data),
+            psycopg2.Binary(pdf_bytes),
+            pdf_name,
+            pdf_size
+        ))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+
+    except Exception as e:
+        st.error(f"❌ Database insert failed: {e}")
+        return False
 
 
 # ----------------------------------------------------------
