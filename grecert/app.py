@@ -72,7 +72,9 @@ if pdf_file:
     itv_entries = []
     for m in re.finditer(itv_pattern, text, re.DOTALL):
         defectos = " ".join(m.group(6).split())
-        defectos = re.split(r"El presente documento|MINISTERIO", defectos)[0].strip()
+        #defectos = re.split(r"El presente documento|MINISTERIO", defectos)[0].strip()
+        defectos = re.split(r"El presente documento|MINISTERIO|HISTORIAL DE LECTURAS", defectos)[0].strip()
+
         itv_entries.append({
             "fecha_itv": normalize_date(m.group(1)),
             "fecha_caducidad": normalize_date(m.group(2)),
