@@ -14,7 +14,7 @@ st.title("🚌 Grecert – ITV Report Parser")
 st.caption("Upload a DGT ITV report PDF. The parser will extract all required CAE fields for verification.")
 
 # ----------------------------------------------------------
-# DATABASE CONNECTION (Timescale / PostgreSQL)
+# DATABASE CONNECTION
 # ----------------------------------------------------------
 DB_CONFIG = {
     "host": "x7un87aw1e.lkb3b7qxlu.tsdb.cloud.timescale.com",
@@ -29,15 +29,13 @@ DB_CONFIG = {
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)
 
-import psycopg2
-from psycopg2.extras import Json
 
 def insert_into_postgres(data, pdf_file):
+    """Insert parsed JSON + PDF into raw.itv_reports."""
     conn = get_connection()
     cur = conn.cursor()
-    matricula = data["vehicle"]["matricula"]
-    csv_code = data["report"]["csv_code"]
 
+    # Ensure schema & table exist
     cur.execute("""
         CREATE SCHEMA IF NOT EXISTS raw;
         CREATE TABLE IF NOT EXISTS raw.itv_reports (
@@ -55,6 +53,9 @@ def insert_into_postgres(data, pdf_file):
         );
     """)
 
+    matricula = data["vehicle"]["matricula"]
+    csv_code = data["report"]["csv_code"]
+
     pdf_bytes = pdf_file.getvalue()
     pdf_name = pdf_file.name
     pdf_size = len(pdf_bytes)
@@ -67,12 +68,9 @@ def insert_into_postgres(data, pdf_file):
         VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT DO NOTHING;
     """, (
-        matricula,
-        csv_code,
-        Json(data),
+        matricula, csv_code, Json(data),
         psycopg2.Binary(pdf_bytes),
-        pdf_name,
-        pdf_size
+        pdf_name, pdf_size
     ))
 
     conn.commit()
@@ -90,9 +88,11 @@ def normalize_date(date_str):
     except Exception:
         return date_str
 
+
 def safe_search(pattern, text, group=1, flags=0):
     match = re.search(pattern, text, flags)
     return match.group(group).strip() if match else None
+
 
 # ----------------------------------------------------------
 # MAIN LOGIC
@@ -100,6 +100,7 @@ def safe_search(pattern, text, group=1, flags=0):
 pdf_file = st.file_uploader("📄 Upload ITV PDF", type=["pdf"])
 
 if pdf_file:
+    # Extract text from PDF
     with pdfplumber.open(pdf_file) as pdf:
         text = "\n".join(page.extract_text() or "" for page in pdf.pages)
 
@@ -108,25 +109,16 @@ if pdf_file:
     # ------------------------------------------------------
     matricula = safe_search(r"Matr[ií]cula:\s*([A-Z0-9]+)", text)
     bastidor = safe_search(r"Bastidor:\s*([A-Z0-9]+)", text)
-
     marca_raw = safe_search(r"Marca:\s*([A-Z0-9\-’' ]{2,20})", text)
     marca = marca_raw.replace(" F", "").strip() if marca_raw else None
-
     modelo_raw = safe_search(r"Modelo:\s*([A-Z'’ ]+CITY LLE)", text)
     modelo = modelo_raw.replace("  ", " ").replace(" S ", "'S ").strip() if modelo_raw else None
-
     renting = safe_search(r"Renting:\s*(Sí|No)", text)
     titular = safe_search(r"Filiación:\s*(.+)", text)
     domicilio = safe_search(r"Domicilio vehículo:\s*(.+)", text)
-
     aseguradora = safe_search(r"Aseguradora:\s*([A-Z,\. ]+)", text)
     if aseguradora:
-        aseguradora = (
-            aseguradora.replace(",", ", ")
-            .replace("  ", " ")
-            .replace(" ,", ",")
-            .strip()
-        )
+        aseguradora = aseguradora.replace(",", ", ").replace("  ", " ").replace(" ,", ",").strip()
 
     # ------------------------------------------------------
     # ITV HISTORY
@@ -180,7 +172,7 @@ if pdf_file:
     canal = safe_search(r"Canal:\s*([A-Z]+)", text)
 
     # ------------------------------------------------------
-    # BAJA DETECTION
+    # BAJA
     # ------------------------------------------------------
     baja_match = re.search(
         r"de baja del\s*(\d{2}/\d{2}/\d{4})\s*hasta el\s*(\d{2}/\d{2}/\d{4})",
@@ -192,7 +184,7 @@ if pdf_file:
     )
 
     # ------------------------------------------------------
-    # BUILD JSON STRUCTURE
+    # BUILD JSON
     # ------------------------------------------------------
     data = {
         "vehicle": {
@@ -228,7 +220,7 @@ if pdf_file:
     }
 
     # ------------------------------------------------------
-    # VALIDATION SUMMARY
+    # VALIDATION
     # ------------------------------------------------------
     mandatory_fields = {
         "matricula": data["vehicle"]["matricula"],
@@ -250,13 +242,11 @@ if pdf_file:
         st.warning(f"⚠️ Missing required fields: {', '.join(missing)}")
     else:
         st.success("✅ All mandatory fields captured successfully!")
-
-        # Store into PostgreSQL
         try:
-            insert_into_postgres(data)
-            st.success("✅ Successfully saved to PostgreSQL (raw.itv_reports)")
+            insert_into_postgres(data, pdf_file)
+            st.success("✅ JSON + PDF saved to PostgreSQL (raw.itv_reports)")
         except Exception as e:
-            st.error(f"Database insert failed: {e}")
+            st.error(f"❌ Database insert failed: {e}")
 
     # ------------------------------------------------------
     # DOWNLOAD JSON
