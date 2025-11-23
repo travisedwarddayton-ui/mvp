@@ -8,3 +8,10 @@ pdfplumber
 regex
 requests
 psycopg2-binary
+streamlit
+pandas
+numpy
+plotly
+seaborn
+matplotlib
+scikit-learn
