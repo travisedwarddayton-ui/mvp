@@ -4,8 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import seaborn as sns
-import matplotlib.pyplot as plt
+import json
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestRegressor, IsolationForest
 from sklearn.linear_model import LinearRegression
@@ -17,477 +16,714 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # ========================================
-# PROFESSIONAL PAGE CONFIGURATION
+# CONFIGURACIÓN PROFESIONAL
 # ========================================
 
 st.set_page_config(
-    page_title="Grecert DGT Transport - Executive Analytics",
-    page_icon="🚛",
+    page_title="Grecert DGT España - Transporte Verde",
+    page_icon="🇪🇸",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# Inicializar estado de sesión
+if 'selected_region' not in st.session_state:
+    st.session_state.selected_region = None
+
 # ========================================
-# PROFESSIONAL CSS WITH MAXIMUM READABILITY
+# TEMA CSS ENERGÍA VERDE PROFESIONAL
 # ========================================
 
-def load_professional_css():
+def load_green_energy_css():
     st.markdown("""
     <style>
-        /* Import Professional Font */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
-        /* Global Styling */
+        /* Configuración Global Verde */
         .main {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: #f8f9fa;
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdf4 100%);
+            color: #1f2937;
         }
         
-        /* Hide Streamlit Branding */
+        /* Ocultar marca Streamlit */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         header {visibility: hidden;}
         
-        /* Professional Header */
-        .executive-header {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        /* Encabezado España Verde */
+        .spain-header {
+            background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
             color: white;
-            padding: 2.5rem 1rem;
+            padding: 3rem 2rem;
             margin: -1rem -1rem 2rem -1rem;
             text-align: center;
-            border-radius: 0 0 20px 20px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            border-radius: 0 0 25px 25px;
+            box-shadow: 0 12px 40px rgba(5, 150, 105, 0.3);
+            position: relative;
+            overflow: hidden;
         }
         
-        .executive-header h1 {
+        .spain-header::before {
+            content: '🇪🇸';
+            position: absolute;
+            top: 1rem;
+            right: 2rem;
             font-size: 3rem;
+            opacity: 0.3;
+        }
+        
+        .spain-header h1 {
+            font-size: 3.5rem;
             font-weight: 700;
             margin: 0;
             color: white !important;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.3);
         }
         
-        .executive-header p {
-            font-size: 1.3rem;
-            margin: 0.8rem 0 0 0;
-            color: rgba(255,255,255,0.9) !important;
+        .spain-header p {
+            font-size: 1.4rem;
+            margin: 1rem 0 0 0;
+            color: rgba(255,255,255,0.95) !important;
             font-weight: 400;
         }
         
-        /* Professional Metric Cards */
-        .metric-card {
-            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-            padding: 1.8rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border: 1px solid #e9ecef;
-            margin-bottom: 1rem;
-            transition: all 0.3s ease;
+        /* Tarjetas Métricas Verde */
+        .green-metric-card {
+            background: linear-gradient(135deg, white 0%, #f0fdf4 100%);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(5, 150, 105, 0.15);
+            border: 2px solid #a7f3d0;
+            margin-bottom: 1.5rem;
+            transition: all 0.4s ease;
             text-align: center;
+            position: relative;
+            overflow: hidden;
         }
         
-        .metric-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        .green-metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #059669 0%, #10b981 50%, #34d399 100%);
+        }
+        
+        .green-metric-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(5, 150, 105, 0.25);
+            border-color: #10b981;
         }
         
         .metric-title {
-            font-size: 0.85rem;
-            color: #6c757d !important;
+            font-size: 0.9rem;
+            color: #059669 !important;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 0.5rem;
+            letter-spacing: 1px;
+            margin-bottom: 0.8rem;
         }
         
         .metric-value {
-            font-size: 2.2rem;
+            font-size: 2.8rem;
             font-weight: 700;
-            color: #2c3e50 !important;
-            margin: 0.3rem 0;
+            color: #064e3b !important;
+            margin: 0.5rem 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
         }
         
         .metric-delta {
-            font-size: 0.9rem;
-            font-weight: 500;
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: 25px;
+            display: inline-block;
+            margin-top: 0.5rem;
         }
         
         .metric-delta.positive {
-            color: #28a745 !important;
+            background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+            color: white !important;
         }
         
         .metric-delta.negative {
-            color: #dc3545 !important;
+            background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+            color: white !important;
         }
         
         .metric-delta.neutral {
-            color: #6c757d !important;
+            background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+            color: white !important;
         }
         
-        /* Professional Insight Boxes */
-        .insight-container {
-            background: #ffffff;
-            border: 1px solid #e9ecef;
-            border-left: 5px solid #007bff;
-            border-radius: 10px;
-            padding: 2rem;
-            margin: 1.5rem 0;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+        /* Contenedores de Insights Verde */
+        .green-insight-container {
+            background: linear-gradient(135deg, white 0%, #f0fdf4 100%);
+            border: 2px solid #a7f3d0;
+            border-left: 6px solid #10b981;
+            border-radius: 15px;
+            padding: 2.5rem;
+            margin: 2rem 0;
+            box-shadow: 0 6px 25px rgba(16, 185, 129, 0.1);
+            position: relative;
         }
         
-        .insight-container h4 {
-            color: #1e3c72 !important;
+        .green-insight-container::before {
+            content: '🌱';
+            position: absolute;
+            top: 1.5rem;
+            right: 2rem;
+            font-size: 2.5rem;
+            opacity: 0.4;
+        }
+        
+        .green-insight-container h4 {
+            color: #059669 !important;
             font-weight: 600;
-            font-size: 1.3rem;
-            margin-bottom: 1rem;
+            font-size: 1.5rem;
+            margin-bottom: 1.2rem;
         }
         
-        .insight-container p,
-        .insight-container li,
-        .insight-container ul {
-            color: #2c3e50 !important;
-            font-size: 1rem;
-            line-height: 1.6;
+        .green-insight-container p,
+        .green-insight-container li {
+            color: #1f2937 !important;
+            font-size: 1.1rem;
+            line-height: 1.7;
         }
         
-        .insight-container strong {
-            color: #1e3c72 !important;
-            font-weight: 600;
-        }
-        
-        /* Professional Recommendation Boxes */
-        .recommendation-container {
-            background: #f8fff8;
-            border: 1px solid #d4edda;
-            border-left: 5px solid #28a745;
-            border-radius: 10px;
-            padding: 2rem;
-            margin: 1.5rem 0;
-            box-shadow: 0 2px 15px rgba(40,167,69,0.08);
-        }
-        
-        .recommendation-container h4 {
-            color: #155724 !important;
-            font-weight: 600;
-            font-size: 1.3rem;
-            margin-bottom: 1rem;
-        }
-        
-        .recommendation-container p,
-        .recommendation-container li,
-        .recommendation-container ul {
-            color: #155724 !important;
-            font-size: 1rem;
-            line-height: 1.6;
-        }
-        
-        .recommendation-container strong {
-            color: #0f4419 !important;
+        .green-insight-container strong {
+            color: #059669 !important;
             font-weight: 600;
         }
         
-        /* Alert Boxes */
+        /* Contenedores de Recomendaciones */
+        .green-recommendation-container {
+            background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+            border: 2px solid #6ee7b7;
+            border-left: 6px solid #10b981;
+            border-radius: 15px;
+            padding: 2.5rem;
+            margin: 2rem 0;
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.15);
+            position: relative;
+        }
+        
+        .green-recommendation-container::before {
+            content: '⚡';
+            position: absolute;
+            top: 1.5rem;
+            right: 2rem;
+            font-size: 2.5rem;
+            opacity: 0.5;
+        }
+        
+        .green-recommendation-container h4 {
+            color: #047857 !important;
+            font-weight: 600;
+            font-size: 1.5rem;
+            margin-bottom: 1.2rem;
+        }
+        
+        .green-recommendation-container p,
+        .green-recommendation-container li {
+            color: #1f2937 !important;
+            font-size: 1.1rem;
+            line-height: 1.7;
+        }
+        
+        /* Alertas Verde */
         .alert-success {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724 !important;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
+            background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+            border: 2px solid #10b981;
+            color: #064e3b !important;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0;
         }
         
         .alert-warning {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            color: #856404 !important;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+            border: 2px solid #f59e0b;
+            color: #92400e !important;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0;
         }
         
         .alert-danger {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24 !important;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border: 2px solid #ef4444;
+            color: #991b1b !important;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0;
         }
         
-        /* Professional Tabs */
+        /* Pestañas Verde */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 4px;
+            gap: 6px;
             background: transparent;
-            margin-bottom: 1rem;
+            margin-bottom: 2rem;
         }
         
         .stTabs [data-baseweb="tab"] {
-            height: 55px;
-            padding: 0px 24px;
-            background: #ffffff !important;
-            border: 2px solid #e9ecef !important;
-            border-radius: 10px 10px 0px 0px !important;
-            color: #495057 !important;
+            height: 65px;
+            padding: 0px 30px;
+            background: linear-gradient(135deg, white 0%, #f0fdf4 100%) !important;
+            border: 2px solid #a7f3d0 !important;
+            border-radius: 15px 15px 0px 0px !important;
+            color: #059669 !important;
             font-weight: 600 !important;
-            font-size: 1rem !important;
+            font-size: 1.1rem !important;
             transition: all 0.3s ease !important;
         }
         
         .stTabs [data-baseweb="tab"]:hover {
-            background: #f8f9fa !important;
-            border-color: #dee2e6 !important;
-            color: #2c3e50 !important;
-            transform: translateY(-2px);
+            background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%) !important;
+            color: white !important;
+            transform: translateY(-3px);
         }
         
         .stTabs [data-baseweb="tab"][aria-selected="true"] {
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
-            border-color: #007bff !important;
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
             color: white !important;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,123,255,0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(5, 150, 105, 0.4);
         }
         
-        /* Ensure all text is readable */
+        /* Sidebar Verde */
+        .css-1d391kg {
+            background: linear-gradient(135deg, #064e3b 0%, #059669 100%);
+        }
+        
+        /* Contenedor Mapa */
+        .map-container {
+            border: 3px solid #10b981;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(16, 185, 129, 0.2);
+            margin: 2rem 0;
+        }
+        
+        /* Tarjetas Comunidad */
+        .community-card {
+            background: linear-gradient(135deg, white 0%, #f0fdf4 100%);
+            border: 2px solid #a7f3d0;
+            border-radius: 15px;
+            padding: 1.8rem;
+            margin: 1rem 0;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .community-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 30px rgba(16, 185, 129, 0.2);
+            border-color: #10b981;
+        }
+        
+        /* Texto legible */
         .stMarkdown p,
         .stMarkdown li,
         .stMarkdown h1,
         .stMarkdown h2,
         .stMarkdown h3,
-        .stMarkdown h4,
-        .stMarkdown h5,
-        .stMarkdown h6 {
-            color: #2c3e50 !important;
+        .stMarkdown h4 {
+            color: #1f2937 !important;
         }
         
-        /* Data tables */
-        .dataframe {
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        }
-        
-        /* Responsive Design */
+        /* Diseño Responsivo */
         @media (max-width: 768px) {
-            .executive-header h1 {
-                font-size: 2.2rem;
+            .spain-header h1 {
+                font-size: 2.5rem;
             }
-            
-            .executive-header p {
-                font-size: 1.1rem;
-            }
-            
-            .metric-card {
-                padding: 1.2rem;
+            .green-metric-card {
+                padding: 1.5rem;
             }
         }
     </style>
     """, unsafe_allow_html=True)
 
-load_professional_css()
+load_green_energy_css()
 
 # ========================================
-# ENHANCED DATA GENERATION
+# DATOS COMUNIDADES AUTÓNOMAS ESPAÑOLAS
+# ========================================
+
+SPAIN_COMMUNITIES = {
+    'Andalucía': {
+        'capital': 'Sevilla',
+        'poblacion': 8472407,
+        'superficie_km2': 87268,
+        'potencial_renovable': 'Excelente',
+        'renovables_principales': ['Solar', 'Eólica', 'Biomasa'],
+        'coordenadas': [37.3886, -5.9823]
+    },
+    'Cataluña': {
+        'capital': 'Barcelona',
+        'poblacion': 7675217,
+        'superficie_km2': 32114,
+        'potencial_renovable': 'Muy Bueno',
+        'renovables_principales': ['Solar', 'Eólica', 'Hidráulica'],
+        'coordenadas': [41.3851, 2.1734]
+    },
+    'Madrid': {
+        'capital': 'Madrid',
+        'poblacion': 6779888,
+        'superficie_km2': 8021,
+        'potencial_renovable': 'Bueno',
+        'renovables_principales': ['Solar', 'Biomasa'],
+        'coordenadas': [40.4168, -3.7038]
+    },
+    'Comunidad Valenciana': {
+        'capital': 'Valencia',
+        'poblacion': 5003769,
+        'superficie_km2': 23255,
+        'potencial_renovable': 'Muy Bueno',
+        'renovables_principales': ['Solar', 'Eólica'],
+        'coordenadas': [39.4699, -0.3763]
+    },
+    'Galicia': {
+        'capital': 'Santiago de Compostela',
+        'poblacion': 2695327,
+        'superficie_km2': 29574,
+        'potencial_renovable': 'Excelente',
+        'renovables_principales': ['Eólica', 'Hidráulica', 'Biomasa'],
+        'coordenadas': [42.8805, -8.5456]
+    },
+    'Castilla y León': {
+        'capital': 'Valladolid',
+        'poblacion': 2383139,
+        'superficie_km2': 94223,
+        'potencial_renovable': 'Muy Bueno',
+        'renovables_principales': ['Eólica', 'Solar', 'Biomasa'],
+        'coordenadas': [41.6518, -4.7245]
+    },
+    'País Vasco': {
+        'capital': 'Vitoria-Gasteiz',
+        'poblacion': 2207776,
+        'superficie_km2': 7234,
+        'potencial_renovable': 'Bueno',
+        'renovables_principales': ['Eólica', 'Hidráulica'],
+        'coordenadas': [42.8467, -2.6716]
+    },
+    'Canarias': {
+        'capital': 'Las Palmas / Santa Cruz',
+        'poblacion': 2175952,
+        'superficie_km2': 7447,
+        'potencial_renovable': 'Excelente',
+        'renovables_principales': ['Solar', 'Eólica', 'Geotérmica'],
+        'coordenadas': [28.2916, -16.6291]
+    },
+    'Castilla-La Mancha': {
+        'capital': 'Toledo',
+        'poblacion': 2045221,
+        'superficie_km2': 79463,
+        'potencial_renovable': 'Excelente',
+        'renovables_principales': ['Solar', 'Eólica'],
+        'coordenadas': [39.8628, -4.0273]
+    },
+    'Murcia': {
+        'capital': 'Murcia',
+        'poblacion': 1518486,
+        'superficie_km2': 11314,
+        'potencial_renovable': 'Muy Bueno',
+        'renovables_principales': ['Solar', 'Biomasa'],
+        'coordenadas': [37.9922, -1.1307]
+    },
+    'Aragón': {
+        'capital': 'Zaragoza',
+        'poblacion': 1319291,
+        'superficie_km2': 47719,
+        'potencial_renovable': 'Muy Bueno',
+        'renovables_principales': ['Eólica', 'Solar', 'Hidráulica'],
+        'coordenadas': [41.6488, -0.8891]
+    },
+    'Baleares': {
+        'capital': 'Palma',
+        'poblacion': 1173008,
+        'superficie_km2': 4992,
+        'potencial_renovable': 'Bueno',
+        'renovables_principales': ['Solar', 'Eólica'],
+        'coordenadas': [39.5696, 2.6502]
+    },
+    'Extremadura': {
+        'capital': 'Mérida',
+        'poblacion': 1067710,
+        'superficie_km2': 41634,
+        'potencial_renovable': 'Excelente',
+        'renovables_principales': ['Solar', 'Biomasa'],
+        'coordenadas': [38.9165, -6.3425]
+    },
+    'Asturias': {
+        'capital': 'Oviedo',
+        'poblacion': 1018784,
+        'superficie_km2': 10604,
+        'potencial_renovable': 'Bueno',
+        'renovables_principales': ['Hidráulica', 'Eólica', 'Biomasa'],
+        'coordenadas': [43.3614, -5.8593]
+    },
+    'Navarra': {
+        'capital': 'Pamplona',
+        'poblacion': 661197,
+        'superficie_km2': 10391,
+        'potencial_renovable': 'Muy Bueno',
+        'renovables_principales': ['Eólica', 'Solar', 'Hidráulica'],
+        'coordenadas': [42.8125, -1.6458]
+    },
+    'Cantabria': {
+        'capital': 'Santander',
+        'poblacion': 582905,
+        'superficie_km2': 5321,
+        'potencial_renovable': 'Bueno',
+        'renovables_principales': ['Hidráulica', 'Eólica'],
+        'coordenadas': [43.4623, -3.8099]
+    },
+    'La Rioja': {
+        'capital': 'Logroño',
+        'poblacion': 319796,
+        'superficie_km2': 5045,
+        'potencial_renovable': 'Bueno',
+        'renovables_principales': ['Eólica', 'Solar'],
+        'coordenadas': [42.4627, -2.4449]
+    }
+}
+
+# ========================================
+# GENERACIÓN DE DATOS DGT ESPAÑA VERDE
 # ========================================
 
 @st.cache_data(ttl=3600)
-def generate_executive_dgt_data(num_records=65000):
-    """Generate comprehensive, realistic DGT Transport data for executive analysis."""
+def generate_spain_green_dgt_data(num_records=60000):
+    """Generar datos DGT de transporte verde para España."""
     np.random.seed(42)
     
-    # European regions with market share weights
-    regions = {
-        'Germany': 0.22, 'France': 0.18, 'Italy': 0.15, 'Spain': 0.13, 
-        'Poland': 0.10, 'Netherlands': 0.08, 'Belgium': 0.06, 'Austria': 0.04,
-        'Portugal': 0.03, 'Greece': 0.01
-    }
+    # Comunidades con pesos realistas
+    communities = list(SPAIN_COMMUNITIES.keys())
+    community_weights = [
+        0.18, 0.16, 0.14, 0.11, 0.06, 0.05, 0.05, 0.05, 0.04, 0.03,
+        0.03, 0.03, 0.02, 0.02, 0.01, 0.01, 0.01
+    ]
     
+    # Tipos de vehículos verdes
     vehicle_types = {
-        'Passenger Car': 0.42, 'Commercial Truck': 0.28, 'Public Bus': 0.12,
-        'Motorcycle': 0.08, 'Heavy Vehicle': 0.06, 'Delivery Van': 0.04
+        'Coche Eléctrico': 0.30,
+        'Coche Híbrido': 0.25,
+        'Autobús Eléctrico': 0.10,
+        'Camión Híbrido': 0.15,
+        'Furgoneta Eléctrica': 0.12,
+        'Motocicleta Eléctrica': 0.05,
+        'Vehículo Convencional': 0.03
     }
     
-    fuel_types = {
-        'Gasoline': 0.30, 'Diesel': 0.32, 'Electric': 0.20, 
-        'Hybrid': 0.12, 'Biofuel': 0.04, 'Hydrogen': 0.02
+    # Fuentes de energía verde
+    energy_sources = {
+        'Eléctrica (Red)': 0.35,
+        'Solar Fotovoltaica': 0.25,
+        'Eólica': 0.18,
+        'Hidroeléctrica': 0.10,
+        'Hidrógeno Verde': 0.07,
+        'Biocombustible': 0.04,
+        'Convencional': 0.01
     }
     
-    violation_categories = {
-        'Speeding': 0.35, 'Parking': 0.20, 'Traffic Signal': 0.15,
-        'Documentation': 0.12, 'Weight Limit': 0.08, 'Route Violation': 0.06,
-        'Emission Standards': 0.04
+    # Tipos de infracciones DGT
+    violation_types = {
+        'Exceso Velocidad': 0.35,
+        'Estacionamiento': 0.20,
+        'Semáforo': 0.15,
+        'Documentación': 0.12,
+        'Emisiones': 0.10,
+        'Peso Excesivo': 0.05,
+        'Ruta No Autorizada': 0.03
     }
     
-    # Generate date range (24 months)
+    # Rango de fechas (24 meses)
     start_date = datetime(2023, 1, 1)
     end_date = datetime(2024, 12, 31)
     date_range = pd.date_range(start=start_date, end=end_date, freq='D')
     
-    # Create comprehensive dataset
+    # Crear dataset
     data = {
-        'date': np.random.choice(date_range, num_records),
-        'region': np.random.choice(list(regions.keys()), num_records, p=list(regions.values())),
-        'vehicle_type': np.random.choice(list(vehicle_types.keys()), num_records, p=list(vehicle_types.values())),
-        'fuel_type': np.random.choice(list(fuel_types.keys()), num_records, p=list(fuel_types.values())),
-        'violation_type': np.random.choice(list(violation_categories.keys()), num_records, p=list(violation_categories.values())),
+        'fecha': np.random.choice(date_range, num_records),
+        'comunidad_autonoma': np.random.choice(communities, num_records, p=community_weights),
+        'tipo_vehiculo': np.random.choice(list(vehicle_types.keys()), num_records, p=list(vehicle_types.values())),
+        'fuente_energia': np.random.choice(list(energy_sources.keys()), num_records, p=list(energy_sources.values())),
+        'tipo_infraccion': np.random.choice(list(violation_types.keys()), num_records, p=list(violation_types.values())),
         
-        # Core operational metrics
-        'distance_km': np.random.lognormal(6.5, 1.0, num_records),
-        'fuel_consumption_l': np.random.lognormal(4.0, 0.9, num_records),
-        'avg_speed_kmh': np.random.normal(70, 18, num_records),
-        'trip_duration_hours': np.random.exponential(2.5, num_records),
-        'passenger_count': np.random.poisson(3, num_records),
-        'freight_weight_tons': np.random.exponential(8, num_records),
+        # Métricas operacionales
+        'distancia_km': np.random.lognormal(6.0, 1.2, num_records),
+        'consumo_energia_kwh': np.random.lognormal(3.5, 0.9, num_records),
+        'velocidad_media_kmh': np.random.normal(65, 15, num_records),
+        'duracion_viaje_horas': np.random.exponential(2.0, num_records),
+        'num_pasajeros': np.random.poisson(2.5, num_records),
+        'carga_toneladas': np.random.exponential(5, num_records),
         
-        # Financial metrics (in EUR)
-        'operational_cost_eur': np.random.lognormal(6.2, 0.7, num_records),
-        'maintenance_cost_eur': np.random.lognormal(4.5, 0.9, num_records),
-        'fuel_cost_eur': np.random.lognormal(4.8, 0.6, num_records),
-        'revenue_eur': np.random.lognormal(7.2, 0.6, num_records),
-        'fine_amount_eur': np.random.lognormal(5.2, 0.8, num_records),
+        # Métricas financieras (EUR)
+        'coste_operacional_eur': np.random.lognormal(5.8, 0.7, num_records),
+        'coste_mantenimiento_eur': np.random.lognormal(4.0, 0.8, num_records),
+        'coste_energia_eur': np.random.lognormal(4.2, 0.6, num_records),
+        'ingresos_eur': np.random.lognormal(6.8, 0.6, num_records),
+        'multa_eur': np.random.lognormal(4.8, 1.0, num_records),
+        'ahorro_verde_eur': np.random.lognormal(3.2, 1.2, num_records),
         
-        # Environmental metrics
-        'co2_emissions_kg': np.random.lognormal(5.5, 0.8, num_records),
-        'nox_emissions_g': np.random.lognormal(3.2, 0.7, num_records),
-        'pm_emissions_g': np.random.lognormal(1.5, 1.0, num_records),
+        # Métricas ambientales
+        'emisiones_co2_kg': np.random.lognormal(4.5, 1.5, num_records),
+        'emisiones_nox_g': np.random.lognormal(2.5, 1.0, num_records),
+        'particulas_pm_g': np.random.lognormal(1.0, 1.2, num_records),
+        'energia_renovable_kwh': np.random.lognormal(3.8, 0.9, num_records),
         
-        # Performance indicators (0-1 scale)
-        'on_time_performance': np.random.beta(8, 2, num_records),
-        'safety_score': np.random.beta(9, 1.5, num_records),
-        'driver_satisfaction': np.random.beta(7, 2.5, num_records),
-        'fuel_efficiency_rating': np.random.beta(6, 3, num_records),
+        # Indicadores de rendimiento (0-1)
+        'puntualidad': np.random.beta(8, 2, num_records),
+        'puntuacion_seguridad': np.random.beta(9, 1.5, num_records),
+        'satisfaccion_conductor': np.random.beta(7, 2.5, num_records),
+        'eficiencia_energetica': np.random.beta(6.5, 2.5, num_records),
+        'indice_sostenibilidad': np.random.beta(7.5, 2, num_records),
         
-        # Compliance indicators
-        'emission_compliance': np.random.choice([0, 1], num_records, p=[0.08, 0.92]),
-        'safety_inspection_pass': np.random.choice([0, 1], num_records, p=[0.10, 0.90]),
-        'digital_compliance': np.random.choice([0, 1], num_records, p=[0.04, 0.96]),
+        # Cumplimiento verde
+        'certificacion_verde': np.random.choice([0, 1], num_records, p=[0.20, 0.80]),
+        'inspeccion_emisiones_ok': np.random.choice([0, 1], num_records, p=[0.05, 0.95]),
+        'cumple_euro6': np.random.choice([0, 1], num_records, p=[0.10, 0.90]),
+        'estacion_carga_disponible': np.random.choice([0, 1], num_records, p=[0.30, 0.70]),
         
-        # External factors
-        'weather_severity': np.random.beta(2, 6, num_records),
-        'traffic_density': np.random.beta(4, 4, num_records),
-        'route_complexity': np.random.beta(3, 5, num_records),
+        # Métricas específicas verdes
+        'share_flota_ev': np.random.beta(3, 5, num_records),
+        'puntos_carga_accesibles': np.random.randint(0, 50, num_records),
+        'inversion_verde_eur': np.random.lognormal(4.5, 1.0, num_records),
+        'progreso_objetivos_2030': np.random.beta(4, 3, num_records),
+        
+        # Factores externos
+        'condiciones_climaticas': np.random.choice(['Soleado', 'Nublado', 'Lluvia', 'Viento'], num_records, p=[0.6, 0.25, 0.12, 0.03]),
+        'densidad_trafico': np.random.beta(4, 4, num_records),
+        'disponibilidad_renovables': np.random.beta(6, 3, num_records),
     }
     
     df = pd.DataFrame(data)
     
-    # Apply realistic constraints
-    df['avg_speed_kmh'] = np.clip(df['avg_speed_kmh'], 25, 140)
-    df['trip_duration_hours'] = np.clip(df['trip_duration_hours'], 0.3, 20)
-    df['passenger_count'] = np.clip(df['passenger_count'], 0, 55)
-    df['freight_weight_tons'] = np.clip(df['freight_weight_tons'], 0, 45)
+    # Aplicar restricciones realistas
+    df['velocidad_media_kmh'] = np.clip(df['velocidad_media_kmh'], 20, 150)
+    df['duracion_viaje_horas'] = np.clip(df['duracion_viaje_horas'], 0.2, 24)
+    df['num_pasajeros'] = np.clip(df['num_pasajeros'], 0, 60)
+    df['carga_toneladas'] = np.clip(df['carga_toneladas'], 0, 50)
     
-    # Vehicle-specific adjustments
-    truck_mask = df['vehicle_type'] == 'Commercial Truck'
-    df.loc[truck_mask, 'distance_km'] *= 2.5
-    df.loc[truck_mask, 'fuel_consumption_l'] *= 3.5
-    df.loc[truck_mask, 'co2_emissions_kg'] *= 4.0
-    df.loc[truck_mask, 'passenger_count'] = 0
-    df.loc[truck_mask, 'freight_weight_tons'] = np.random.uniform(5, 40, truck_mask.sum())
+    # Ajustes específicos por tipo de vehículo
+    electric_mask = df['tipo_vehiculo'].str.contains('Eléctrico', na=False)
+    df.loc[electric_mask, 'emisiones_co2_kg'] = 0
+    df.loc[electric_mask, 'emisiones_nox_g'] = 0
+    df.loc[electric_mask, 'particulas_pm_g'] = 0
+    df.loc[electric_mask, 'coste_energia_eur'] *= 0.25
+    df.loc[electric_mask, 'certificacion_verde'] = 1
+    df.loc[electric_mask, 'indice_sostenibilidad'] = np.random.beta(9, 1, electric_mask.sum())
     
-    bus_mask = df['vehicle_type'] == 'Public Bus'
-    df.loc[bus_mask, 'passenger_count'] = np.random.randint(10, 55, bus_mask.sum())
-    df.loc[bus_mask, 'freight_weight_tons'] = 0
-    df.loc[bus_mask, 'fuel_consumption_l'] *= 2.2
+    hybrid_mask = df['tipo_vehiculo'].str.contains('Híbrido', na=False)
+    df.loc[hybrid_mask, 'emisiones_co2_kg'] *= 0.4
+    df.loc[hybrid_mask, 'emisiones_nox_g'] *= 0.5
+    df.loc[hybrid_mask, 'coste_energia_eur'] *= 0.6
+    df.loc[hybrid_mask, 'indice_sostenibilidad'] = np.random.beta(7.5, 2, hybrid_mask.sum())
     
-    car_mask = df['vehicle_type'] == 'Passenger Car'
-    df.loc[car_mask, 'passenger_count'] = np.random.randint(1, 5, car_mask.sum())
-    df.loc[car_mask, 'freight_weight_tons'] = 0
+    # Ajustes por fuente de energía
+    solar_mask = df['fuente_energia'] == 'Solar Fotovoltaica'
+    df.loc[solar_mask, 'ahorro_verde_eur'] *= 1.8
+    df.loc[solar_mask, 'indice_sostenibilidad'] = np.random.beta(9, 1, solar_mask.sum())
     
-    # Electric vehicle adjustments
-    electric_mask = df['fuel_type'] == 'Electric'
-    df.loc[electric_mask, ['co2_emissions_kg', 'nox_emissions_g', 'pm_emissions_g']] = 0
-    df.loc[electric_mask, 'fuel_cost_eur'] *= 0.25
-    df.loc[electric_mask, 'emission_compliance'] = 1
+    wind_mask = df['fuente_energia'] == 'Eólica'
+    df.loc[wind_mask, 'ahorro_verde_eur'] *= 1.6
+    df.loc[wind_mask, 'indice_sostenibilidad'] = np.random.beta(8.5, 1.2, wind_mask.sum())
     
-    # Hybrid adjustments
-    hybrid_mask = df['fuel_type'] == 'Hybrid'
-    df.loc[hybrid_mask, 'co2_emissions_kg'] *= 0.55
-    df.loc[hybrid_mask, 'fuel_consumption_l'] *= 0.65
-    df.loc[hybrid_mask, 'fuel_cost_eur'] *= 0.70
+    hydrogen_mask = df['fuente_energia'] == 'Hidrógeno Verde'
+    df.loc[hydrogen_mask, 'ahorro_verde_eur'] *= 2.2
+    df.loc[hydrogen_mask, 'indice_sostenibilidad'] = np.random.beta(9.5, 0.8, hydrogen_mask.sum())
     
-    # Weather impact
-    severe_weather = df['weather_severity'] > 0.7
-    df.loc[severe_weather, 'avg_speed_kmh'] *= np.random.uniform(0.6, 0.85, severe_weather.sum())
-    df.loc[severe_weather, 'on_time_performance'] *= np.random.uniform(0.75, 0.90, severe_weather.sum())
-    df.loc[severe_weather, 'safety_score'] *= np.random.uniform(0.80, 0.95, severe_weather.sum())
+    # Impacto del clima en renovables
+    sunny_mask = df['condiciones_climaticas'] == 'Soleado'
+    df.loc[sunny_mask, 'energia_renovable_kwh'] *= 1.5
+    df.loc[sunny_mask, 'disponibilidad_renovables'] = np.random.beta(8, 2, sunny_mask.sum())
     
-    # Calculate derived metrics
-    df['fuel_efficiency_km_per_l'] = np.where(
-        df['fuel_consumption_l'] > 0, 
-        df['distance_km'] / df['fuel_consumption_l'], 
+    windy_mask = df['condiciones_climaticas'] == 'Viento'
+    df.loc[windy_mask, 'energia_renovable_kwh'] *= 1.7
+    df.loc[windy_mask, 'disponibilidad_renovables'] = np.random.beta(9, 1, windy_mask.sum())
+    
+    # Calcular métricas derivadas
+    df['eficiencia_km_per_kwh'] = np.where(
+        df['consumo_energia_kwh'] > 0,
+        df['distancia_km'] / df['consumo_energia_kwh'],
         0
     )
-    df['emissions_per_km'] = np.where(
-        df['distance_km'] > 0, 
-        df['co2_emissions_kg'] / df['distance_km'], 
+    df['emisiones_por_km'] = np.where(
+        df['distancia_km'] > 0,
+        df['emisiones_co2_kg'] / df['distancia_km'],
         0
     )
-    df['total_cost_eur'] = (
-        df['operational_cost_eur'] + 
-        df['maintenance_cost_eur'] + 
-        df['fuel_cost_eur']
+    df['coste_total_eur'] = (
+        df['coste_operacional_eur'] +
+        df['coste_mantenimiento_eur'] +
+        df['coste_energia_eur']
     )
-    df['profit_eur'] = df['revenue_eur'] - df['total_cost_eur']
-    df['profit_margin'] = np.where(
-        df['revenue_eur'] > 0, 
-        df['profit_eur'] / df['revenue_eur'], 
+    df['beneficio_eur'] = df['ingresos_eur'] - df['coste_total_eur']
+    df['margen_beneficio'] = np.where(
+        df['ingresos_eur'] > 0,
+        df['beneficio_eur'] / df['ingresos_eur'],
         0
     )
-    df['cost_per_km'] = np.where(
-        df['distance_km'] > 0, 
-        df['total_cost_eur'] / df['distance_km'], 
-        0
-    )
-    df['revenue_per_km'] = np.where(
-        df['distance_km'] > 0, 
-        df['revenue_eur'] / df['distance_km'], 
-        0
+    df['puntuacion_verde_total'] = (
+        df['indice_sostenibilidad'] * 0.4 +
+        df['eficiencia_energetica'] * 0.3 +
+        df['disponibilidad_renovables'] * 0.3
     )
     
-    # Add temporal features
-    df['year'] = df['date'].dt.year
-    df['month'] = df['date'].dt.month
-    df['quarter'] = df['date'].dt.quarter
-    df['day_of_week'] = df['date'].dt.day_name()
-    df['week_number'] = df['date'].dt.isocalendar().week
-    df['is_weekend'] = df['date'].dt.weekday >= 5
+    # Características temporales
+    df['año'] = df['fecha'].dt.year
+    df['mes'] = df['fecha'].dt.month
+    df['trimestre'] = df['fecha'].dt.quarter
+    df['dia_semana'] = df['fecha'].dt.day_name()
+    df['es_fin_semana'] = df['fecha'].dt.weekday >= 5
+    df['estacion'] = df['mes'].map({
+        12: 'Invierno', 1: 'Invierno', 2: 'Invierno',
+        3: 'Primavera', 4: 'Primavera', 5: 'Primavera',
+        6: 'Verano', 7: 'Verano', 8: 'Verano',
+        9: 'Otoño', 10: 'Otoño', 11: 'Otoño'
+    })
     
-    # Clean and validate data
+    # Limpiar y validar datos
     df = df.replace([np.inf, -np.inf], np.nan)
     numeric_columns = df.select_dtypes(include=[np.number]).columns
     df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].median())
     
-    # Final data quality checks
-    df['profit_margin'] = df['profit_margin'].clip(-1, 1)
-    df['on_time_performance'] = df['on_time_performance'].clip(0, 1)
-    df['safety_score'] = df['safety_score'].clip(0, 1)
-    df['driver_satisfaction'] = df['driver_satisfaction'].clip(0, 1)
+    # Controles de calidad final
+    df['margen_beneficio'] = df['margen_beneficio'].clip(-1, 1)
+    df['puntualidad'] = df['puntualidad'].clip(0, 1)
+    df['puntuacion_seguridad'] = df['puntuacion_seguridad'].clip(0, 1)
+    df['indice_sostenibilidad'] = df['indice_sostenibilidad'].clip(0, 1)
+    df['puntuacion_verde_total'] = df['puntuacion_verde_total'].clip(0, 1)
+    df['share_flota_ev'] = df['share_flota_ev'].clip(0, 1)
+    df['progreso_objetivos_2030'] = df['progreso_objetivos_2030'].clip(0, 1)
     
     return df
 
 # ========================================
-# ADVANCED ANALYTICS FUNCTIONS
+# FUNCIONES ANALÍTICAS AVANZADAS
 # ========================================
 
-def perform_executive_anomaly_detection(df, metric_column, contamination=0.08):
-    """Executive-level anomaly detection with business context."""
+def perform_green_anomaly_detection(df, metric_column, contamination=0.08):
+    """Detección de anomalías centrada en métricas verdes."""
     try:
-        # Daily aggregation for executive overview
-        daily_data = df.groupby('date').agg({
+        daily_data = df.groupby('fecha').agg({
             metric_column: ['sum', 'mean', 'std', 'count']
         }).reset_index()
         
-        daily_data.columns = ['date', f'{metric_column}_sum', f'{metric_column}_mean', 
+        daily_data.columns = ['fecha', f'{metric_column}_sum', f'{metric_column}_mean', 
                              f'{metric_column}_std', f'{metric_column}_count']
         
         if len(daily_data) < 10:
             return daily_data, pd.DataFrame()
         
-        # Multi-dimensional anomaly detection
         features = [f'{metric_column}_sum', f'{metric_column}_mean']
         feature_data = daily_data[features].fillna(daily_data[features].median())
         
-        # Isolation Forest
         iso_forest = IsolationForest(
             contamination=contamination, 
             random_state=42,
@@ -496,55 +732,47 @@ def perform_executive_anomaly_detection(df, metric_column, contamination=0.08):
         daily_data['anomaly_flag'] = iso_forest.fit_predict(feature_data)
         daily_data['anomaly_score'] = iso_forest.score_samples(feature_data)
         
-        # Extract anomalies
         anomalies = daily_data[daily_data['anomaly_flag'] == -1].copy()
         
         return daily_data, anomalies
         
     except Exception as e:
-        st.error(f"Anomaly detection error: {str(e)}")
+        st.error(f"Error en detección de anomalías: {str(e)}")
         return pd.DataFrame(), pd.DataFrame()
 
-def executive_forecasting_engine(df, metric_column, periods=6):
-    """Advanced forecasting with ensemble methods and confidence intervals."""
+def green_forecasting_engine(df, metric_column, periods=6):
+    """Motor de predicción para métricas verdes."""
     try:
-        # Monthly aggregation for strategic forecasting
-        monthly_data = df.groupby(pd.Grouper(key='date', freq='M')).agg({
+        monthly_data = df.groupby(pd.Grouper(key='fecha', freq='M')).agg({
             metric_column: ['sum', 'mean', 'count']
         }).reset_index()
         
-        monthly_data.columns = ['date', f'{metric_column}_sum', f'{metric_column}_mean', f'{metric_column}_count']
+        monthly_data.columns = ['fecha', f'{metric_column}_sum', f'{metric_column}_mean', f'{metric_column}_count']
         
         if len(monthly_data) < 6:
             return None, None
         
-        # Feature engineering
         monthly_data['month_index'] = range(len(monthly_data))
-        monthly_data['trend'] = monthly_data[f'{metric_column}_sum'].rolling(window=3, center=True).mean()
-        monthly_data['seasonal'] = monthly_data['date'].dt.month
+        monthly_data['seasonal'] = monthly_data['fecha'].dt.month
         
-        # Prepare features
         X = monthly_data[['month_index', 'seasonal']].values
         y = monthly_data[f'{metric_column}_sum'].values
         
-        # Ensemble forecasting models
         models = {
             'linear': LinearRegression(),
             'rf': RandomForestRegressor(n_estimators=150, random_state=42, max_depth=10)
         }
         
-        # Train models
         predictions = {}
         for name, model in models.items():
             model.fit(X, y)
             predictions[name] = model
         
-        # Generate future features
         last_month_index = monthly_data['month_index'].max()
         future_features = []
         
         for i in range(1, periods + 1):
-            future_month = monthly_data['date'].max() + pd.DateOffset(months=i)
+            future_month = monthly_data['fecha'].max() + pd.DateOffset(months=i)
             future_features.append([
                 last_month_index + i,
                 future_month.month
@@ -552,7 +780,6 @@ def executive_forecasting_engine(df, metric_column, periods=6):
         
         future_features = np.array(future_features)
         
-        # Generate ensemble predictions
         ensemble_predictions = []
         for features in future_features:
             pred_values = []
@@ -560,7 +787,6 @@ def executive_forecasting_engine(df, metric_column, periods=6):
                 pred_values.append(model.predict([features])[0])
             ensemble_predictions.append(np.mean(pred_values))
         
-        # Calculate confidence intervals using model variance
         prediction_std = []
         for features in future_features:
             pred_values = []
@@ -568,13 +794,11 @@ def executive_forecasting_engine(df, metric_column, periods=6):
                 pred_values.append(model.predict([features])[0])
             prediction_std.append(np.std(pred_values))
         
-        # Generate future dates
-        last_date = monthly_data['date'].max()
+        last_date = monthly_data['fecha'].max()
         future_dates = [last_date + pd.DateOffset(months=i) for i in range(1, periods + 1)]
         
-        # Create forecast dataframe
         forecast_df = pd.DataFrame({
-            'date': future_dates,
+            'fecha': future_dates,
             'prediction': ensemble_predictions,
             'lower_bound': [p - 1.96 * s for p, s in zip(ensemble_predictions, prediction_std)],
             'upper_bound': [p + 1.96 * s for p, s in zip(ensemble_predictions, prediction_std)],
@@ -584,92 +808,25 @@ def executive_forecasting_engine(df, metric_column, periods=6):
         return monthly_data, forecast_df
         
     except Exception as e:
-        st.error(f"Forecasting error: {str(e)}")
+        st.error(f"Error en predicción: {str(e)}")
         return None, None
 
-def strategic_regional_clustering(df, n_clusters=4):
-    """Strategic clustering analysis for regional performance segmentation."""
-    try:
-        # Regional performance aggregation
-        regional_metrics = df.groupby('region').agg({
-            'co2_emissions_kg': 'sum',
-            'fuel_efficiency_km_per_l': 'mean',
-            'total_cost_eur': 'sum',
-            'revenue_eur': 'sum',
-            'profit_eur': 'sum',
-            'on_time_performance': 'mean',
-            'safety_score': 'mean',
-            'distance_km': 'sum',
-            'digital_compliance': 'mean'
-        }).reset_index()
-        
-        # Calculate derived metrics
-        regional_metrics['profit_margin'] = (
-            regional_metrics['profit_eur'] / regional_metrics['revenue_eur']
-        ).fillna(0)
-        regional_metrics['emissions_intensity'] = (
-            regional_metrics['co2_emissions_kg'] / regional_metrics['distance_km']
-        ).fillna(0)
-        regional_metrics['cost_efficiency'] = (
-            regional_metrics['total_cost_eur'] / regional_metrics['distance_km']
-        ).fillna(0)
-        
-        # Select clustering features
-        clustering_features = [
-            'fuel_efficiency_km_per_l', 'on_time_performance', 
-            'safety_score', 'profit_margin', 'emissions_intensity'
-        ]
-        
-        X = regional_metrics[clustering_features].fillna(regional_metrics[clustering_features].mean())
-        
-        if len(X) < 3:
-            regional_metrics['cluster'] = 0
-            return regional_metrics, None, 0
-        
-        # Standardize features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        
-        # Optimal cluster determination
-        best_score = -1
-        best_k = min(n_clusters, len(X) - 1)
-        
-        for k in range(2, min(8, len(X))):
-            if k >= len(X):
-                break
-            kmeans = KMeans(n_clusters=k, random_state=42, n_init=20, max_iter=300)
-            cluster_labels = kmeans.fit_predict(X_scaled)
-            
-            if len(np.unique(cluster_labels)) > 1:
-                score = silhouette_score(X_scaled, cluster_labels)
-                if score > best_score:
-                    best_score = score
-                    best_k = k
-        
-        # Final clustering
-        final_kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=20, max_iter=300)
-        regional_metrics['cluster'] = final_kmeans.fit_predict(X_scaled)
-        
-        return regional_metrics, final_kmeans, best_score
-        
-    except Exception as e:
-        st.error(f"Clustering error: {str(e)}")
-        return df.groupby('region').mean().reset_index(), None, 0
-
-def create_professional_metric_card(title, value, delta=None, format_type="number"):
-    """Create professional metric cards with proper formatting."""
+def create_green_metric_card(title, value, delta=None, format_type="number", icon="🌱"):
+    """Crear tarjetas métricas con tema verde."""
     
-    # Format value based on type
     if format_type == "currency":
-        formatted_value = f"€{value:,.2f}"
+        formatted_value = f"€{value:,.0f}"
     elif format_type == "percentage":
         formatted_value = f"{value:.1f}%"
     elif format_type == "decimal":
         formatted_value = f"{value:.2f}"
+    elif format_type == "energy":
+        formatted_value = f"{value:,.0f} kWh"
+    elif format_type == "emissions":
+        formatted_value = f"{value:,.0f} kg CO₂"
     else:
         formatted_value = f"{value:,.0f}"
     
-    # Format delta
     delta_html = ""
     if delta:
         if isinstance(delta, str):
@@ -688,783 +845,973 @@ def create_professional_metric_card(title, value, delta=None, format_type="numbe
             delta_html = f'<div class="metric-delta {delta_class}">{delta_symbol} {abs(delta):.1f}%</div>'
     
     return f"""
-    <div class="metric-card">
-        <div class="metric-title">{title}</div>
+    <div class="green-metric-card">
+        <div class="metric-title">{icon} {title}</div>
         <div class="metric-value">{formatted_value}</div>
         {delta_html}
     </div>
     """
 
 # ========================================
-# MAIN APPLICATION
+# GEOJSON ESPAÑA (EMBEBIDO)
 # ========================================
 
-def main():
-    # Professional Header
-    st.markdown("""
-    <div class="executive-header">
-        <h1>🚛 Grecert DGT Transport Intelligence</h1>
-        <p>Executive Business Intelligence & AI-Powered Analytics Platform</p>
+SPAIN_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Andalucía", "id": "AN"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-7.5, 38.5], [-2.5, 38.5], [-2.5, 36.0], [-7.5, 36.0], [-7.5, 38.5]]]
+            }
+        },
+        {
+            "type": "Feature", 
+            "properties": {"NAME_1": "Cataluña", "id": "CT"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[0.5, 42.8], [3.3, 42.8], [3.3, 40.5], [0.5, 40.5], [0.5, 42.8]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Madrid", "id": "MD"},
+            "geometry": {
+                "type": "Polygon", 
+                "coordinates": [[[-4.5, 41.0], [-3.0, 41.0], [-3.0, 39.8], [-4.5, 39.8], [-4.5, 41.0]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Comunidad Valenciana", "id": "VC"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-1.5, 40.8], [0.8, 40.8], [0.8, 37.8], [-1.5, 37.8], [-1.5, 40.8]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Galicia", "id": "GA"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-9.5, 43.8], [-6.5, 43.8], [-6.5, 41.8], [-9.5, 41.8], [-9.5, 43.8]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Castilla y León", "id": "CL"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-7.0, 43.0], [-2.0, 43.0], [-2.0, 40.0], [-7.0, 40.0], [-7.0, 43.0]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "País Vasco", "id": "PV"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-3.5, 43.5], [-1.5, 43.5], [-1.5, 42.8], [-3.5, 42.8], [-3.5, 43.5]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Canarias", "id": "CN"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-18.2, 28.8], [-13.4, 28.8], [-13.4, 27.6], [-18.2, 27.6], [-18.2, 28.8]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Castilla-La Mancha", "id": "CM"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-5.5, 40.0], [-1.0, 40.0], [-1.0, 38.0], [-5.5, 38.0], [-5.5, 40.0]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Murcia", "id": "MC"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-2.3, 38.5], [-0.6, 38.5], [-0.6, 37.0], [-2.3, 37.0], [-2.3, 38.5]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Aragón", "id": "AR"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-2.0, 42.8], [0.8, 42.8], [0.8, 39.8], [-2.0, 39.8], [-2.0, 42.8]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Baleares", "id": "IB"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[1.2, 40.1], [4.3, 40.1], [4.3, 38.6], [1.2, 38.6], [1.2, 40.1]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Extremadura", "id": "EX"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-7.5, 40.5], [-4.8, 40.5], [-4.8, 37.8], [-7.5, 37.8], [-7.5, 40.5]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Asturias", "id": "AS"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-7.2, 43.6], [-4.5, 43.6], [-4.5, 43.0], [-7.2, 43.0], [-7.2, 43.6]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Navarra", "id": "NC"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-2.7, 43.0], [-1.0, 43.0], [-1.0, 42.0], [-2.7, 42.0], [-2.7, 43.0]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "Cantabria", "id": "CB"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-4.8, 43.5], [-3.2, 43.5], [-3.2, 43.0], [-4.8, 43.0], [-4.8, 43.5]]]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {"NAME_1": "La Rioja", "id": "RI"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[-3.0, 42.7], [-1.8, 42.7], [-1.8, 42.0], [-3.0, 42.0], [-3.0, 42.7]]]
+            }
+        }
+    ]
+}
+
+# ========================================
+# DASHBOARD REGIONAL
+# ========================================
+
+def display_regional_dashboard(selected_region_name, df_region, all_regional_performance):
+    """Mostrar dashboard detallado para la región seleccionada."""
+    
+    st.markdown(f"""
+    <div class="spain-header">
+        <h1>🌱 {selected_region_name}</h1>
+        <p>Análisis Detallado de Transporte Verde</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Load data
-    with st.spinner("🔄 Loading comprehensive transport analytics data..."):
-        df = generate_executive_dgt_data()
+    # Datos de la región
+    region_data = all_regional_performance[all_regional_performance['comunidad_autonoma'] == selected_region_name].iloc[0]
+    community_info = SPAIN_COMMUNITIES[selected_region_name]
     
-    # Executive Control Panel
-    st.sidebar.markdown("## 🎛️ Executive Control Center")
-    st.sidebar.markdown("---")
-    
-    # Date range controls
-    min_date = df['date'].min().date()
-    max_date = df['date'].max().date()
-    
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        start_date = st.date_input("Start Date", min_date, min_value=min_date, max_value=max_date)
-    with col2:
-        end_date = st.date_input("End Date", max_date, min_value=min_date, max_value=max_date)
-    
-    # Strategic filters
-    st.sidebar.markdown("### 🌍 Strategic Scope")
-    selected_regions = st.sidebar.multiselect(
-        "Regions",
-        options=sorted(df['region'].unique()),
-        default=sorted(df['region'].unique())[:6]
-    )
-    
-    selected_vehicles = st.sidebar.multiselect(
-        "Vehicle Categories",
-        options=df['vehicle_type'].unique(),
-        default=df['vehicle_type'].unique()
-    )
-    
-    selected_fuels = st.sidebar.multiselect(
-        "Energy Sources",
-        options=df['fuel_type'].unique(),
-        default=df['fuel_type'].unique()
-    )
-    
-    # Advanced analytics options
-    st.sidebar.markdown("### ⚙️ Analytics Configuration")
-    forecast_horizon = st.sidebar.slider("Forecast Horizon (months)", 3, 18, 8)
-    anomaly_sensitivity = st.sidebar.slider("Anomaly Detection Sensitivity", 0.02, 0.15, 0.06, 0.01)
-    
-    # Apply filters
-    mask = (df['date'] >= pd.to_datetime(start_date)) & (df['date'] <= pd.to_datetime(end_date))
-    filtered_df = df[mask]
-    
-    if selected_regions:
-        filtered_df = filtered_df[filtered_df['region'].isin(selected_regions)]
-    if selected_vehicles:
-        filtered_df = filtered_df[filtered_df['vehicle_type'].isin(selected_vehicles)]
-    if selected_fuels:
-        filtered_df = filtered_df[filtered_df['fuel_type'].isin(selected_fuels)]
-    
-    if filtered_df.empty:
-        st.error("⚠️ No data matches your selection criteria. Please adjust the filters.")
-        return
-    
-    # Executive KPI Dashboard
-    st.markdown("## 📊 Executive Performance Dashboard")
-    
-    # Calculate executive KPIs
-    total_operations = len(filtered_df)
-    total_distance_mkm = filtered_df['distance_km'].sum() / 1_000_000
-    total_revenue_m = filtered_df['revenue_eur'].sum() / 1_000_000
-    total_profit_m = filtered_df['profit_eur'].sum() / 1_000_000
-    total_emissions_m = filtered_df['co2_emissions_kg'].sum() / 1_000_000
-    avg_efficiency = filtered_df['fuel_efficiency_km_per_l'].mean()
-    avg_on_time = filtered_df['on_time_performance'].mean() * 100
-    avg_safety = filtered_df['safety_score'].mean() * 100
-    avg_profit_margin = filtered_df['profit_margin'].mean() * 100
-    
-    # Display KPIs
+    # KPIs regionales
+    st.markdown("### 🌟 Indicadores Clave de Rendimiento Verde")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown(create_professional_metric_card(
-            "Total Operations", total_operations, delta="+8.5% YoY"
-        ), unsafe_allow_html=True)
-        
-        st.markdown(create_professional_metric_card(
-            "Distance (Million km)", total_distance_mkm, delta=12.3, format_type="decimal"
+        st.markdown(create_green_metric_card(
+            "Puntuación Verde", region_data['puntuacion_verde_total'] * 100, 
+            format_type="percentage", icon="🌟"
         ), unsafe_allow_html=True)
     
     with col2:
-        st.markdown(create_professional_metric_card(
-            "Revenue (Million €)", total_revenue_m, delta=15.7, format_type="currency"
-        ), unsafe_allow_html=True)
-        
-        st.markdown(create_professional_metric_card(
-            "Profit (Million €)", total_profit_m, delta=22.4, format_type="currency"
+        st.markdown(create_green_metric_card(
+            "Share Flota EV", region_data['share_flota_ev'] * 100, 
+            format_type="percentage", icon="🔋"
         ), unsafe_allow_html=True)
     
     with col3:
-        st.markdown(create_professional_metric_card(
-            "CO₂ Emissions (M kg)", total_emissions_m, delta=-8.2, format_type="decimal"
-        ), unsafe_allow_html=True)
-        
-        st.markdown(create_professional_metric_card(
-            "Fuel Efficiency", avg_efficiency, delta=5.1, format_type="decimal"
+        st.markdown(create_green_metric_card(
+            "Emisiones CO₂", region_data['emisiones_co2_total'] / 1000, 
+            format_type="emissions", icon="🌿"
         ), unsafe_allow_html=True)
     
     with col4:
-        st.markdown(create_professional_metric_card(
-            "On-Time Performance", avg_on_time, delta=3.8, format_type="percentage"
-        ), unsafe_allow_html=True)
-        
-        st.markdown(create_professional_metric_card(
-            "Profit Margin", avg_profit_margin, delta=4.2, format_type="percentage"
+        st.markdown(create_green_metric_card(
+            "Ahorro Verde", region_data['ahorro_verde_total'] / 1000, 
+            format_type="currency", icon="💚"
         ), unsafe_allow_html=True)
     
+    # Información de la comunidad
     st.markdown("---")
+    col_info1, col_info2 = st.columns(2)
     
-    # Executive Analytics Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🔮 **Predictive Intelligence**",
-        "🗺️ **Regional Performance**", 
-        "🤖 **AI Strategic Insights**",
-        "⚠️ **Risk & Anomaly Detection**",
-        "📈 **Strategic Planning**"
+    with col_info1:
+        st.markdown(f"""
+        <div class="green-insight-container">
+            <h4>📍 Información Regional</h4>
+            <p><strong>Capital:</strong> {community_info['capital']}</p>
+            <p><strong>Población:</strong> {community_info['poblacion']:,} habitantes</p>
+            <p><strong>Superficie:</strong> {community_info['superficie_km2']:,} km²</p>
+            <p><strong>Potencial Renovable:</strong> {community_info['potencial_renovable']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_info2:
+        st.markdown(f"""
+        <div class="green-insight-container">
+            <h4>⚡ Energías Renovables Principales</h4>
+            <p><strong>Fuentes Principales:</strong></p>
+            <ul>
+        """)
+        for renewable in community_info['renovables_principales']:
+            st.markdown(f"<li>{renewable}</li>")
+        st.markdown(f"""
+            </ul>
+            <p><strong>Progreso Objetivos 2030:</strong> {region_data['progreso_objetivos_2030'] * 100:.1f}%</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Pestañas de análisis
+    st.markdown("---")
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📈 **Tendencias Verde**",
+        "🔮 **Predicciones IA**", 
+        "⚠️ **Detección Anomalías**",
+        "🎯 **Estrategia Verde**"
     ])
     
     with tab1:
-        st.markdown("### 🔮 Executive Forecasting & Predictive Analytics")
+        st.markdown(f"### 📈 Tendencias de Transporte Verde - {selected_region_name}")
         
-        col1, col2 = st.columns([3, 1])
-        
-        with col2:
-            forecast_metric = st.selectbox(
-                "Forecast Target",
-                options=['revenue_eur', 'profit_eur', 'co2_emissions_kg', 'total_cost_eur'],
-                format_func=lambda x: x.replace('_', ' ').replace('eur', '(EUR)').replace('kg', '(kg)').title()
-            )
-        
-        # Generate forecast
-        historical_data, forecast_data = executive_forecasting_engine(
-            filtered_df, forecast_metric, forecast_horizon
-        )
-        
-        if historical_data is not None and forecast_data is not None:
-            with col1:
-                # Professional forecast visualization
-                fig = go.Figure()
-                
-                # Historical trend
-                fig.add_trace(go.Scatter(
-                    x=historical_data['date'],
-                    y=historical_data[f'{forecast_metric}_sum'],
-                    mode='lines+markers',
-                    name='Historical Performance',
-                    line=dict(color='#007bff', width=3),
-                    marker=dict(size=6, color='#007bff')
-                ))
-                
-                # Forecast line
-                fig.add_trace(go.Scatter(
-                    x=forecast_data['date'],
-                    y=forecast_data['prediction'],
-                    mode='lines+markers',
-                    name='Strategic Forecast',
-                    line=dict(color='#28a745', width=3, dash='dash'),
-                    marker=dict(size=8, symbol='diamond', color='#28a745')
-                ))
-                
-                # Confidence band
-                fig.add_trace(go.Scatter(
-                    x=list(forecast_data['date']) + list(forecast_data['date'][::-1]),
-                    y=list(forecast_data['upper_bound']) + list(forecast_data['lower_bound'][::-1]),
-                    fill='toself',
-                    fillcolor='rgba(40, 167, 69, 0.15)',
-                    line=dict(color='rgba(255,255,255,0)'),
-                    name='95% Confidence Interval',
-                    showlegend=True
-                ))
-                
-                fig.update_layout(
-                    title=f"📈 {forecast_metric.replace('_', ' ').title()} Strategic Forecast",
-                    xaxis_title="Timeline",
-                    yaxis_title=forecast_metric.replace('_', ' ').title(),
-                    template='plotly_white',
-                    height=520,
-                    hovermode='x unified',
-                    font=dict(family='Inter', size=12),
-                    showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # Strategic insights
-            next_period = forecast_data['prediction'].iloc[0]
-            current_avg = historical_data[f'{forecast_metric}_sum'].tail(6).mean()
-            growth_rate = ((next_period - current_avg) / current_avg) * 100 if current_avg != 0 else 0
-            
-            confidence_width = forecast_data['confidence_width'].mean()
-            forecast_quality = "High" if confidence_width < next_period * 0.2 else "Medium" if confidence_width < next_period * 0.4 else "Low"
-            
-            if growth_rate > 10:
-                trend_assessment = "Strong Growth Trajectory"
-                strategic_action = "Prepare for capacity expansion and resource scaling"
-            elif growth_rate > 0:
-                trend_assessment = "Positive Growth Trend"
-                strategic_action = "Monitor performance and optimize current operations"
-            elif growth_rate > -10:
-                trend_assessment = "Stabilization Period"
-                strategic_action = "Focus on efficiency improvements and cost optimization"
-            else:
-                trend_assessment = "Declining Performance"
-                strategic_action = "Implement immediate corrective measures and strategic review"
-            
-            st.markdown(f"""
-            <div class="insight-container">
-                <h4>🎯 Strategic Forecast Intelligence</h4>
-                <p><strong>Trend Assessment:</strong> {trend_assessment} ({growth_rate:+.1f}% projected change)</p>
-                <p><strong>Next Period Projection:</strong> {next_period:,.0f} units</p>
-                <p><strong>Forecast Confidence:</strong> {forecast_quality} ({100-confidence_width/next_period*100:.0f}% reliability)</p>
-                <p><strong>Strategic Recommendation:</strong> {strategic_action}</p>
-                <p><strong>Executive Action:</strong> {'Schedule board presentation for growth investment approval' if growth_rate > 15 else 'Continue quarterly monitoring with operational adjustments' if growth_rate > -5 else 'Initiate emergency strategic review and cost reduction program'}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Insufficient historical data for reliable forecasting. Please expand the date range or adjust filters.")
-    
-    with tab2:
-        st.markdown("### 🗺️ Regional Performance Intelligence & Market Analysis")
-        
-        # Regional performance metrics
-        regional_performance = filtered_df.groupby('region').agg({
-            'revenue_eur': 'sum',
-            'profit_eur': 'sum', 
-            'total_cost_eur': 'sum',
-            'co2_emissions_kg': 'sum',
-            'distance_km': 'sum',
-            'fuel_efficiency_km_per_l': 'mean',
-            'on_time_performance': 'mean',
-            'safety_score': 'mean'
+        # Tendencias mensuales
+        monthly_trends = df_region.groupby(pd.Grouper(key='fecha', freq='M')).agg({
+            'share_flota_ev': 'mean',
+            'emisiones_co2_kg': 'sum',
+            'energia_renovable_kwh': 'sum',
+            'ahorro_verde_eur': 'sum',
+            'puntuacion_verde_total': 'mean'
         }).reset_index()
         
-        regional_performance['profit_margin'] = (
-            regional_performance['profit_eur'] / regional_performance['revenue_eur']
-        ).fillna(0)
-        regional_performance['emissions_intensity'] = (
-            regional_performance['co2_emissions_kg'] / regional_performance['distance_km']
-        ).fillna(0)
-        regional_performance['market_share'] = (
-            regional_performance['revenue_eur'] / regional_performance['revenue_eur'].sum() * 100
+        fig_trends = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=(
+                "Evolución Share Flota EV (%)", 
+                "Emisiones CO₂ Mensuales (kg)",
+                "Energía Renovable (kWh)", 
+                "Ahorro Verde Acumulado (€)"
+            )
         )
         
-        col1, col2 = st.columns(2)
+        fig_trends.add_trace(
+            go.Scatter(
+                x=monthly_trends['fecha'], 
+                y=monthly_trends['share_flota_ev'] * 100,
+                mode='lines+markers', 
+                name='Share EV (%)', 
+                line=dict(color='#10b981', width=3)
+            ), row=1, col=1
+        )
         
-        with col1:
-            # Regional performance matrix
-            fig_matrix = px.scatter(
-                regional_performance,
-                x='emissions_intensity',
-                y='profit_margin',
-                size='revenue_eur',
-                color='on_time_performance',
-                hover_name='region',
-                title="🎯 Regional Strategic Performance Matrix",
-                labels={
-                    'emissions_intensity': 'Environmental Impact (CO₂/km)',
-                    'profit_margin': 'Profitability Margin',
-                    'on_time_performance': 'Service Quality'
-                },
-                color_continuous_scale='Viridis',
-                size_max=25
-            )
-            fig_matrix.update_layout(
+        fig_trends.add_trace(
+            go.Scatter(
+                x=monthly_trends['fecha'], 
+                y=monthly_trends['emisiones_co2_kg'],
+                mode='lines+markers', 
+                name='CO₂ (kg)', 
+                line=dict(color='#ef4444', width=3)
+            ), row=1, col=2
+        )
+        
+        fig_trends.add_trace(
+            go.Scatter(
+                x=monthly_trends['fecha'], 
+                y=monthly_trends['energia_renovable_kwh'],
+                mode='lines+markers', 
+                name='Renovable (kWh)', 
+                line=dict(color='#3b82f6', width=3)
+            ), row=2, col=1
+        )
+        
+        fig_trends.add_trace(
+            go.Scatter(
+                x=monthly_trends['fecha'], 
+                y=monthly_trends['ahorro_verde_eur'],
+                mode='lines+markers', 
+                name='Ahorro (€)', 
+                line=dict(color='#f59e0b', width=3)
+            ), row=2, col=2
+        )
+        
+        fig_trends.update_layout(
+            height=600, 
+            title_text=f"Tendencias Transporte Verde - {selected_region_name}",
+            showlegend=False, 
+            template='plotly_white', 
+            font=dict(family='Inter')
+        )
+        
+        st.plotly_chart(fig_trends, use_container_width=True)
+        
+        # Análisis de tendencias
+        ev_growth = ((monthly_trends['share_flota_ev'].iloc[-1] / monthly_trends['share_flota_ev'].iloc[0]) - 1) * 100
+        co2_change = ((monthly_trends['emisiones_co2_kg'].iloc[-1] / monthly_trends['emisiones_co2_kg'].iloc[0]) - 1) * 100
+        
+        st.markdown(f"""
+        <div class="green-insight-container">
+            <h4>📊 Análisis de Tendencias</h4>
+            <p><strong>Crecimiento Flota EV:</strong> {ev_growth:+.1f}% en el período analizado</p>
+            <p><strong>Cambio Emisiones CO₂:</strong> {co2_change:+.1f}% respecto al inicio</p>
+            <p><strong>Evaluación:</strong> {'Excelente progreso hacia movilidad sostenible' if ev_growth > 15 and co2_change < -10 else 'Progreso moderado, acelerar iniciativas verdes' if ev_growth > 5 else 'Requiere intervención urgente en políticas verdes'}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with tab2:
+        st.markdown(f"### 🔮 Predicciones IA - {selected_region_name}")
+        
+        # Predicción de emisiones CO₂
+        co2_historical, co2_forecast = green_forecasting_engine(df_region, 'emisiones_co2_kg', periods=6)
+        
+        if co2_historical is not None and co2_forecast is not None:
+            fig_forecast = go.Figure()
+            
+            fig_forecast.add_trace(go.Scatter(
+                x=co2_historical['fecha'],
+                y=co2_historical['emisiones_co2_kg_sum'] / 1000,
+                mode='lines+markers',
+                name='Histórico CO₂ (tons)',
+                line=dict(color='#10b981', width=3)
+            ))
+            
+            fig_forecast.add_trace(go.Scatter(
+                x=co2_forecast['fecha'],
+                y=co2_forecast['prediction'] / 1000,
+                mode='lines+markers',
+                name='Predicción CO₂ (tons)',
+                line=dict(color='#34d399', width=3, dash='dash')
+            ))
+            
+            fig_forecast.add_trace(go.Scatter(
+                x=list(co2_forecast['fecha']) + list(co2_forecast['fecha'][::-1]),
+                y=list(co2_forecast['upper_bound'] / 1000) + list(co2_forecast['lower_bound'] / 1000)[::-1],
+                fill='toself',
+                fillcolor='rgba(52, 211, 153, 0.2)',
+                line=dict(color='rgba(255,255,255,0)'),
+                name='Intervalo Confianza',
+                showlegend=True
+            ))
+            
+            fig_forecast.update_layout(
+                title=f"Predicción Emisiones CO₂ - {selected_region_name}",
+                xaxis_title="Fecha",
+                yaxis_title="CO₂ (Toneladas)",
                 template='plotly_white',
-                height=480,
+                height=500,
                 font=dict(family='Inter')
             )
-            st.plotly_chart(fig_matrix, use_container_width=True)
-        
-        with col2:
-            # Market share and profitability
-            fig_bubble = px.scatter(
-                regional_performance,
-                x='market_share',
-                y='profit_margin',
-                size='revenue_eur',
-                color='safety_score',
-                hover_name='region',
-                title="💼 Market Position & Profitability Analysis",
-                labels={
-                    'market_share': 'Market Share (%)',
-                    'profit_margin': 'Profit Margin',
-                    'safety_score': 'Safety Performance'
-                },
-                color_continuous_scale='RdYlGn',
-                size_max=25
-            )
-            fig_bubble.update_layout(
-                template='plotly_white',
-                height=480,
-                font=dict(family='Inter')
-            )
-            st.plotly_chart(fig_bubble, use_container_width=True)
-        
-        # Regional champions analysis
-        st.markdown("#### 🏆 Regional Performance Champions")
-        
-        if not regional_performance.empty:
-            col1, col2, col3, col4 = st.columns(4)
             
-            with col1:
-                revenue_leader = regional_performance.loc[regional_performance['revenue_eur'].idxmax()]
-                st.markdown(f"""
-                **💰 Revenue Champion**
-                - **{revenue_leader['region']}**
-                - €{revenue_leader['revenue_eur']/1000000:.1f}M revenue
-                - {revenue_leader['market_share']:.1f}% market share
-                """)
+            st.plotly_chart(fig_forecast, use_container_width=True)
             
-            with col2:
-                profit_leader = regional_performance.loc[regional_performance['profit_margin'].idxmax()]
-                st.markdown(f"""
-                **📈 Profitability Leader**
-                - **{profit_leader['region']}**
-                - {profit_leader['profit_margin']:.1%} margin
-                - €{profit_leader['profit_eur']/1000000:.1f}M profit
-                """)
-            
-            with col3:
-                efficiency_leader = regional_performance.loc[regional_performance['fuel_efficiency_km_per_l'].idxmax()]
-                st.markdown(f"""
-                **⚡ Efficiency Champion**
-                - **{efficiency_leader['region']}**
-                - {efficiency_leader['fuel_efficiency_km_per_l']:.1f} km/L
-                - Best-in-class operations
-                """)
-            
-            with col4:
-                green_leader = regional_performance.loc[regional_performance['emissions_intensity'].idxmin()]
-                st.markdown(f"""
-                **🌱 Sustainability Leader**
-                - **{green_leader['region']}**
-                - {green_leader['emissions_intensity']:.2f} kg CO₂/km
-                - Environmental excellence
-                """)
-    
-    with tab3:
-        st.markdown("### 🤖 AI-Powered Strategic Insights & Performance Clustering")
-        
-        # Strategic clustering analysis
-        col1, col2 = st.columns([3, 1])
-        
-        with col2:
-            cluster_count = st.slider("Strategic Segments", 2, 6, 4)
-            
-        regional_clusters, clustering_model, silhouette_score_val = strategic_regional_clustering(
-            filtered_df, n_clusters=cluster_count
-        )
-        
-        if clustering_model is not None and not regional_clusters.empty:
-            with col1:
-                # FIXED: 3D strategic clustering visualization with correct discrete color handling
-                fig_3d = px.scatter_3d(
-                    regional_clusters,
-                    x='fuel_efficiency_km_per_l',
-                    y='on_time_performance',
-                    z='profit_margin',
-                    color='cluster',
-                    size='revenue_eur',
-                    hover_name='region',
-                    title=f"🎯 Strategic Regional Segmentation (Quality Score: {silhouette_score_val:.3f})",
-                    labels={
-                        'fuel_efficiency_km_per_l': 'Operational Efficiency',
-                        'on_time_performance': 'Service Quality',
-                        'profit_margin': 'Financial Performance'
-                    },
-                    color_discrete_sequence=px.colors.qualitative.Set3  # CORRECTED LINE
-                )
-                fig_3d.update_layout(
-                    template='plotly_white',
-                    height=550,
-                    font=dict(family='Inter')
-                )
-                st.plotly_chart(fig_3d, use_container_width=True)
-            
-            # Strategic cluster analysis
-            st.markdown("#### 📊 Strategic Cluster Intelligence")
-            
-            for cluster_id in sorted(regional_clusters['cluster'].unique()):
-                cluster_regions = regional_clusters[regional_clusters['cluster'] == cluster_id]
-                
-                # Calculate cluster characteristics
-                avg_efficiency = cluster_regions['fuel_efficiency_km_per_l'].mean()
-                avg_performance = cluster_regions['on_time_performance'].mean()
-                avg_safety = cluster_regions['safety_score'].mean()
-                avg_margin = cluster_regions['profit_margin'].mean()
-                total_revenue = cluster_regions['revenue_eur'].sum()
-                
-                # Determine cluster profile
-                performance_indicators = []
-                if avg_efficiency > regional_clusters['fuel_efficiency_km_per_l'].median():
-                    performance_indicators.append("High Efficiency")
-                if avg_performance > regional_clusters['on_time_performance'].median():
-                    performance_indicators.append("Superior Service")
-                if avg_safety > regional_clusters['safety_score'].median():
-                    performance_indicators.append("Excellent Safety")
-                if avg_margin > regional_clusters['profit_margin'].median():
-                    performance_indicators.append("Strong Profitability")
-                
-                cluster_profile = " + ".join(performance_indicators) if performance_indicators else "Development Opportunity"
-                
-                # Strategic recommendations
-                if len(performance_indicators) >= 3:
-                    strategic_focus = "Market leader - expand and replicate best practices"
-                elif len(performance_indicators) >= 2:
-                    strategic_focus = "Strong performer - targeted improvements needed"
-                elif len(performance_indicators) >= 1:
-                    strategic_focus = "Mixed performance - strategic intervention required"
-                else:
-                    strategic_focus = "Underperformer - comprehensive transformation needed"
-                
-                st.markdown(f"""
-                <div class="insight-container">
-                    <h4>🎯 Strategic Segment {cluster_id + 1}: {cluster_profile}</h4>
-                    <p><strong>Regions:</strong> {', '.join(cluster_regions['region'].tolist())}</p>
-                    <p><strong>Financial Impact:</strong> €{total_revenue/1000000:.1f}M revenue ({total_revenue/regional_clusters['revenue_eur'].sum()*100:.1f}% of total)</p>
-                    <p><strong>Performance Metrics:</strong></p>
-                    <ul>
-                        <li>Operational Efficiency: {avg_efficiency:.1f} km/L</li>
-                        <li>Service Quality: {avg_performance:.1%}</li>
-                        <li>Safety Performance: {avg_safety:.1%}</li>
-                        <li>Profit Margin: {avg_margin:.1%}</li>
-                    </ul>
-                    <p><strong>Strategic Priority:</strong> {strategic_focus}</p>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("Insufficient data for meaningful strategic segmentation with current filters.")
-    
-    with tab4:
-        st.markdown("### ⚠️ Executive Risk Assessment & Anomaly Detection")
-        
-        # Risk assessment controls
-        col1, col2 = st.columns([3, 1])
-        
-        with col2:
-            risk_metric = st.selectbox(
-                "Risk Assessment Focus",
-                options=['profit_eur', 'co2_emissions_kg', 'total_cost_eur', 'safety_score'],
-                format_func=lambda x: x.replace('_', ' ').title()
-            )
-        
-        # Perform executive anomaly detection
-        daily_analysis, risk_events = perform_executive_anomaly_detection(
-            filtered_df, risk_metric, contamination=anomaly_sensitivity
-        )
-        
-        if not daily_analysis.empty:
-            with col1:
-                # Risk visualization
-                fig_risk = go.Figure()
-                
-                # Normal operations baseline
-                normal_operations = daily_analysis[daily_analysis['anomaly_flag'] == 1]
-                fig_risk.add_trace(go.Scatter(
-                    x=normal_operations['date'],
-                    y=normal_operations[f'{risk_metric}_sum'],
-                    mode='lines+markers',
-                    name='Normal Operations',
-                    line=dict(color='#007bff', width=2),
-                    marker=dict(size=4, color='#007bff', opacity=0.7)
-                ))
-                
-                # Risk events
-                if not risk_events.empty:
-                    fig_risk.add_trace(go.Scatter(
-                        x=risk_events['date'],
-                        y=risk_events[f'{risk_metric}_sum'],
-                        mode='markers',
-                        name='Risk Events Detected',
-                        marker=dict(
-                            size=12, 
-                            color='#dc3545', 
-                            symbol='diamond',
-                            line=dict(width=2, color='#a71e2a')
-                        )
-                    ))
-                
-                fig_risk.update_layout(
-                    title=f"🚨 Executive Risk Assessment: {risk_metric.replace('_', ' ').title()}",
-                    xaxis_title="Timeline",
-                    yaxis_title=risk_metric.replace('_', ' ').title(),
-                    template='plotly_white',
-                    height=500,
-                    font=dict(family='Inter'),
-                    hovermode='x unified'
-                )
-                
-                st.plotly_chart(fig_risk, use_container_width=True)
-        
-        # Risk assessment summary
-        if not risk_events.empty:
-            risk_frequency = len(risk_events) / len(daily_analysis) * 100
-            most_recent_risk = risk_events['date'].max()
-            highest_risk_value = risk_events[f'{risk_metric}_sum'].max()
-            
-            # Risk severity assessment
-            if risk_frequency > 15:
-                risk_level = "Critical"
-                risk_color = "danger"
-                executive_action = "Immediate board escalation and crisis management protocol activation required"
-            elif risk_frequency > 8:
-                risk_level = "High"
-                risk_color = "warning"
-                executive_action = "Senior management review and corrective action plan within 48 hours"
-            elif risk_frequency > 3:
-                risk_level = "Medium"
-                risk_color = "warning"
-                executive_action = "Operational review and preventive measures implementation"
-            else:
-                risk_level = "Low"
-                risk_color = "success"
-                executive_action = "Continue monitoring with standard reporting procedures"
+            # Insight de predicción
+            current_co2_avg = co2_historical['emisiones_co2_kg_sum'].tail(3).mean()
+            next_co2_forecast = co2_forecast['prediction'].iloc[0]
+            co2_change_percent = ((next_co2_forecast - current_co2_avg) / current_co2_avg) * 100 if current_co2_avg else 0
             
             st.markdown(f"""
-            <div class="alert-{risk_color}">
-                <h4>🚨 Executive Risk Alert - {risk_level} Risk Level</h4>
-                <p><strong>Risk Event Frequency:</strong> {len(risk_events)} events ({risk_frequency:.1f}% of operational days)</p>
-                <p><strong>Most Recent Risk Event:</strong> {most_recent_risk.strftime('%Y-%m-%d')}</p>
-                <p><strong>Maximum Risk Exposure:</strong> {highest_risk_value:,.0f} units</p>
-                <p><strong>Executive Action Required:</strong> {executive_action}</p>
+            <div class="green-insight-container">
+                <h4>🎯 Insight Predictivo</h4>
+                <p>Las emisiones CO₂ proyectadas para {selected_region_name} muestran un <strong>{co2_change_percent:+.1f}%</strong> de cambio el próximo período.</p>
+                <p><strong>Interpretación:</strong> {'Tendencia positiva hacia reducción de emisiones, continuar políticas verdes actuales.' if co2_change_percent < -5 else 'Estabilización de emisiones, evaluar nuevas medidas de reducción.' if abs(co2_change_percent) < 5 else 'Aumento preocupante, implementar medidas correctivas urgentes.'}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Datos insuficientes para predicción confiable. Amplíe el período de análisis.")
+    
+    with tab3:
+        st.markdown(f"### ⚠️ Detección de Anomalías - {selected_region_name}")
+        
+        # Detección de anomalías en inversión verde
+        green_investment_daily, green_investment_anomalies = perform_green_anomaly_detection(
+            df_region, 'inversion_verde_eur', contamination=0.1
+        )
+        
+        if not green_investment_anomalies.empty:
+            st.markdown(f"""
+            <div class="alert-warning">
+                <h4>⚠️ Anomalías en Inversión Verde Detectadas</h4>
+                <p>Se identificaron <strong>{len(green_investment_anomalies)}</strong> días con patrones anómalos en inversión verde para {selected_region_name}.</p>
+                <p><strong>Recomendación:</strong> Investigar estos períodos para identificar causas y asegurar financiación estable para iniciativas verdes.</p>
             </div>
             """, unsafe_allow_html=True)
             
-            # Risk event details
-            with st.expander("📊 Detailed Risk Event Analysis"):
-                risk_summary = risk_events.groupby(risk_events['date'].dt.month).agg({
-                    f'{risk_metric}_sum': ['count', 'mean', 'max'],
-                    'anomaly_score': 'mean'
-                }).round(2)
-                st.dataframe(risk_summary, use_container_width=True)
+            with st.expander("Ver fechas de anomalías detalladas"):
+                st.dataframe(
+                    green_investment_anomalies[['fecha', 'inversion_verde_eur_sum']],
+                    use_container_width=True
+                )
         else:
             st.markdown("""
             <div class="alert-success">
-                <h4>✅ Risk Assessment: All Clear</h4>
-                <p>No significant risk events detected in the current analysis period.</p>
-                <p><strong>Status:</strong> Operations within normal parameters</p>
-                <p><strong>Recommendation:</strong> Continue standard monitoring and reporting procedures</p>
+                <h4>✅ Inversión Verde Estable</h4>
+                <p>No se detectaron anomalías significativas en los patrones de inversión verde. Las iniciativas muestran consistencia operacional.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Detección de anomalías en eficiencia energética
+        efficiency_daily, efficiency_anomalies = perform_green_anomaly_detection(
+            df_region, 'eficiencia_km_per_kwh', contamination=0.08
+        )
+        
+        if not efficiency_anomalies.empty:
+            st.markdown(f"""
+            <div class="alert-danger">
+                <h4>🚨 Anomalías en Eficiencia Energética</h4>
+                <p><strong>{len(efficiency_anomalies)}</strong> días con eficiencia energética anómala detectados.</p>
+                <p><strong>Impacto:</strong> Posibles problemas en infraestructura o gestión de flota eléctrica.</p>
             </div>
             """, unsafe_allow_html=True)
     
-    with tab5:
-        st.markdown("### 📈 Strategic Planning & Executive Scenario Analysis")
+    with tab4:
+        st.markdown(f"### 🎯 Estrategia Verde Personalizada - {selected_region_name}")
         
-        st.markdown("#### 🎯 Strategic Impact Modeling")
+        # Benchmarking nacional
+        national_avg = all_regional_performance.agg({
+            'share_flota_ev': 'mean',
+            'puntuacion_verde_total': 'mean',
+            'progreso_objetivos_2030': 'mean'
+        })
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("##### 🔋 Sustainability Transformation")
-            
-            ev_expansion = st.slider("Electric Fleet Expansion (%)", 0, 60, 25, key="sustainability")
-            efficiency_program = st.slider("Operational Efficiency Program (%)", 0, 35, 18, key="efficiency")
-            
-            # Calculate sustainability impact
-            baseline_emissions = filtered_df['co2_emissions_kg'].sum()
-            baseline_fuel_cost = filtered_df['fuel_cost_eur'].sum()
-            
-            # EV impact modeling
-            non_ev_emissions = filtered_df[filtered_df['fuel_type'] != 'Electric']['co2_emissions_kg'].sum()
-            ev_emission_reduction = non_ev_emissions * (ev_expansion / 100)
-            
-            # Efficiency impact
-            efficiency_emission_reduction = (baseline_emissions - ev_emission_reduction) * (efficiency_program / 100)
-            
-            total_emission_reduction = ev_emission_reduction + efficiency_emission_reduction
-            projected_emissions = baseline_emissions - total_emission_reduction
-            
-            # Cost impact
-            ev_cost_savings = baseline_fuel_cost * (ev_expansion / 100) * 0.75
-            efficiency_cost_savings = baseline_fuel_cost * (efficiency_program / 100) * 0.4
-            total_cost_savings = ev_cost_savings + efficiency_cost_savings
-            
-            # Visualization
-            sustainability_data = pd.DataFrame({
-                'Scenario': ['Current State', 'Sustainability Target'],
-                'CO2_Emissions_M_kg': [baseline_emissions/1000000, projected_emissions/1000000],
-                'Fuel_Cost_M_EUR': [baseline_fuel_cost/1000000, (baseline_fuel_cost - total_cost_savings)/1000000]
-            })
-            
-            fig_sustainability = px.bar(
-                sustainability_data.melt(id_vars='Scenario', var_name='Metric', value_name='Value'),
-                x='Scenario',
-                y='Value',
-                color='Metric',
-                barmode='group',
-                title="🌱 Sustainability Impact Analysis",
-                color_discrete_map={
-                    'CO2_Emissions_M_kg': '#ff6b6b',
-                    'Fuel_Cost_M_EUR': '#4ecdc4'
-                }
-            )
-            fig_sustainability.update_layout(template='plotly_white', height=400, font=dict(family='Inter'))
-            st.plotly_chart(fig_sustainability, use_container_width=True)
-            
-            # Sustainability metrics
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.metric("CO₂ Reduction", f"{total_emission_reduction/1000000:.2f}M kg", 
-                         f"-{total_emission_reduction/baseline_emissions*100:.1f}%")
-            with col_b:
-                st.metric("Cost Savings", f"€{total_cost_savings/1000000:.2f}M", 
-                         f"-{total_cost_savings/baseline_fuel_cost*100:.1f}%")
-        
-        with col2:
-            st.markdown("##### 💼 Financial Optimization")
-            
-            revenue_growth_target = st.slider("Revenue Growth Target (%)", 0, 50, 22, key="revenue")
-            cost_optimization = st.slider("Cost Optimization Program (%)", 0, 30, 15, key="cost_opt")
-            
-            # Calculate financial impact
-            baseline_revenue = filtered_df['revenue_eur'].sum()
-            baseline_costs = filtered_df['total_cost_eur'].sum()
-            baseline_profit = baseline_revenue - baseline_costs
-            baseline_margin = baseline_profit / baseline_revenue if baseline_revenue > 0 else 0
-            
-            # Projected scenario
-            projected_revenue = baseline_revenue * (1 + revenue_growth_target / 100)
-            projected_costs = baseline_costs * (1 - cost_optimization / 100)
-            projected_profit = projected_revenue - projected_costs
-            projected_margin = projected_profit / projected_revenue if projected_revenue > 0 else 0
-            
-            # ROI calculation
-            profit_improvement = projected_profit - baseline_profit
-            margin_improvement = projected_margin - baseline_margin
-            
-            # Financial visualization
-            financial_data = pd.DataFrame({
-                'Metric': ['Revenue', 'Costs', 'Profit'] * 2,
-                'Scenario': ['Current'] * 3 + ['Optimized'] * 3,
-                'Value_M_EUR': [
-                    baseline_revenue/1000000, baseline_costs/1000000, baseline_profit/1000000,
-                    projected_revenue/1000000, projected_costs/1000000, projected_profit/1000000
-                ]
-            })
-            
-            fig_financial = px.bar(
-                financial_data,
-                x='Metric',
-                y='Value_M_EUR',
-                color='Scenario',
-                barmode='group',
-                title="💰 Financial Optimization Impact",
-                color_discrete_map={
-                    'Current': '#ffa726',
-                    'Optimized': '#66bb6a'
-                }
-            )
-            fig_financial.update_layout(template='plotly_white', height=400, font=dict(family='Inter'))
-            st.plotly_chart(fig_financial, use_container_width=True)
-            
-            # Financial metrics
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.metric("Profit Increase", f"€{profit_improvement/1000000:.2f}M", 
-                         f"+{profit_improvement/baseline_profit*100:.1f}%")
-            with col_b:
-                st.metric("Margin Improvement", f"{projected_margin:.1%}", 
-                         f"+{margin_improvement*100:.1f}pp")
-        
-        # Strategic recommendations engine
-        st.markdown("---")
-        st.markdown("#### 🎯 AI-Generated Strategic Recommendations")
-        
+        # Generar recomendaciones estratégicas
         recommendations = []
         
-        # Sustainability recommendations
-        if baseline_emissions > 0 and total_emission_reduction > baseline_emissions * 0.20:
+        if region_data['share_flota_ev'] < national_avg['share_flota_ev'] * 0.8:
             recommendations.append({
-                "priority": "High",
-                "category": "Sustainability Leadership",
-                "title": "Accelerate Green Transformation Initiative",
-                "description": f"Scenario analysis demonstrates {total_emission_reduction/baseline_emissions*100:.1f}% emission reduction potential with €{total_cost_savings/1000000:.1f}M cost savings. Position company as industry sustainability leader.",
-                "financial_impact": f"€{total_cost_savings/1000000:.1f}M annual savings",
-                "timeline": "12-18 months implementation"
+                "prioridad": "Alta",
+                "categoria": "Electrificación Flota",
+                "titulo": "Programa Acelerado de Transición Eléctrica",
+                "descripcion": f"El share de flota EV de {selected_region_name} ({region_data['share_flota_ev']:.1%}) está significativamente por debajo de la media nacional. Implementar incentivos agresivos y campañas de concienciación.",
+                "impacto_financiero": "Inversión estimada: €8-15M, beneficio potencial: €25M a largo plazo",
+                "cronograma": "Acción inmediata, impacto en 6-12 meses"
             })
         
-        # Financial optimization recommendations
-        if margin_improvement > 0.05:
+        if region_data['puntuacion_verde_total'] < national_avg['puntuacion_verde_total'] * 0.85:
             recommendations.append({
-                "priority": "High",
-                "category": "Financial Performance",
-                "title": "Execute Aggressive Growth & Optimization Strategy",
-                "description": f"Financial modeling indicates {margin_improvement*100:.1f} percentage point margin improvement potential, generating €{profit_improvement/1000000:.1f}M additional profit.",
-                "financial_impact": f"€{profit_improvement/1000000:.1f}M profit increase",
-                "timeline": "6-12 months execution"
+                "prioridad": "Media",
+                "categoria": "Mejora Integral Sostenibilidad",
+                "titulo": "Plan Integral de Movilidad Sostenible",
+                "descripcion": f"Puntuación verde general ({region_data['puntuacion_verde_total']:.2f}) requiere mejora. Enfocar en infraestructura de carga y energías renovables.",
+                "impacto_financiero": "Inversión: €5-12M en infraestructura verde",
+                "cronograma": "Implementación en 12-18 meses"
             })
         
-        # Risk management recommendations
-        if not risk_events.empty and len(risk_events) > len(daily_analysis) * 0.08:
+        if region_data['progreso_objetivos_2030'] < 0.6:
             recommendations.append({
-                "priority": "Medium",
-                "category": "Risk Management",
-                "title": "Implement Advanced Risk Monitoring System",
-                "description": f"Risk analysis identified {len(risk_events)/len(daily_analysis)*100:.1f}% operational anomaly rate. Deploy predictive analytics and real-time monitoring.",
-                "financial_impact": "Risk mitigation value: €2-5M annually",
-                "timeline": "3-6 months deployment"
+                "prioridad": "Alta",
+                "categoria": "Objetivos 2030",
+                "titulo": "Aceleración Urgente hacia Objetivos 2030",
+                "descripcion": f"Progreso actual ({region_data['progreso_objetivos_2030']:.1%}) insuficiente para cumplir objetivos 2030. Requiere intervención estratégica inmediata.",
+                "impacto_financiero": "Riesgo de sanciones + oportunidades perdidas",
+                "cronograma": "Acción inmediata, revisión trimestral"
             })
         
-        # Operational excellence recommendations
-        if not regional_performance.empty:
-            best_performing_region = regional_performance.loc[regional_performance['profit_margin'].idxmax(), 'region']
+        if not recommendations:
             recommendations.append({
-                "priority": "Medium",
-                "category": "Operational Excellence",
-                "title": "Scale Best Practice Framework",
-                "description": f"Replicate {best_performing_region}'s operational model across network. Current margin: {regional_performance.loc[regional_performance['profit_margin'].idxmax(), 'profit_margin']:.1%}",
-                "financial_impact": "Estimated €3-8M improvement potential",
-                "timeline": "9-15 months rollout"
+                "prioridad": "Baja",
+                "categoria": "Optimización Continua",
+                "titulo": "Mantener Liderazgo en Transporte Verde",
+                "descripcion": f"{selected_region_name} muestra excelente rendimiento verde. Enfocar en innovación y compartir mejores prácticas.",
+                "impacto_financiero": "Ventaja competitiva sostenida",
+                "cronograma": "Mejora continua"
             })
         
-        # Display strategic recommendations
+        # Mostrar recomendaciones
         for i, rec in enumerate(recommendations, 1):
-            priority_colors = {"High": "#dc3545", "Medium": "#ffc107", "Low": "#28a745"}
-            priority_color = priority_colors.get(rec["priority"], "#6c757d")
+            priority_colors = {"Alta": "#ef4444", "Media": "#f59e0b", "Baja": "#10b981"}
+            priority_color = priority_colors.get(rec["prioridad"], "#6b7280")
             
             st.markdown(f"""
-            <div class="recommendation-container">
-                <h4>💡 Strategic Initiative {i}: {rec['title']} 
-                    <span style="background: {priority_color}; color: white; padding: 4px 12px; border-radius: 15px; font-size: 0.8rem; margin-left: 15px; font-weight: 600;">
-                        {rec['priority']} Priority
+            <div class="green-recommendation-container">
+                <h4>💡 Iniciativa Estratégica {i}: {rec['titulo']} 
+                    <span style="background: {priority_color}; color: white; padding: 6px 15px; border-radius: 20px; font-size: 0.9rem; margin-left: 15px; font-weight: 600;">
+                        Prioridad {rec['prioridad']}
                     </span>
                 </h4>
-                <p><strong>Category:</strong> {rec['category']}</p>
-                <p><strong>Strategic Rationale:</strong> {rec['description']}</p>
-                <p><strong>Financial Impact:</strong> {rec['financial_impact']}</p>
-                <p><strong>Implementation Timeline:</strong> {rec['timeline']}</p>
+                <p><strong>Categoría:</strong> {rec['categoria']}</p>
+                <p><strong>Diagnóstico:</strong> {rec['descripcion']}</p>
+                <p><strong>Impacto Financiero:</strong> {rec['impacto_financiero']}</p>
+                <p><strong>Cronograma:</strong> {rec['cronograma']}</p>
             </div>
             """, unsafe_allow_html=True)
-    
-    # Executive Summary Dashboard
-    st.markdown("---")
-    st.markdown(f"""
-    <div class="insight-container">
-        <h4>📋 Executive Intelligence Summary</h4>
-        <p><strong>Analysis Period:</strong> {start_date} to {end_date} | <strong>Scope:</strong> {len(filtered_df):,} operations across {len(selected_regions)} regions</p>
-        <p><strong>Financial Performance:</strong> €{total_revenue_m:.1f}M revenue | €{total_profit_m:.1f}M profit | {avg_profit_margin:.1f}% margin</p>
-        <p><strong>Operational Excellence:</strong> {total_distance_mkm:.1f}M km network | {avg_on_time:.1f}% on-time | {avg_safety:.1f}% safety score</p>
-        <p><strong>Environmental Impact:</strong> {total_emissions_m:.1f}M kg CO₂ | {avg_efficiency:.1f} km/L efficiency | Sustainability opportunities identified</p>
-        <p><strong>Strategic Opportunities:</strong> {len(recommendations)} high-impact initiatives | Est. €{(total_revenue_m * 0.25):.1f}M optimization potential</p>
-        <p><strong>Risk Assessment:</strong> {len(risk_events) if not risk_events.empty else 0} anomalies detected | {'Risk management protocols activated' if not risk_events.empty and len(risk_events) > 5 else 'Operations within normal parameters'}</p>
+
+# ========================================
+# APLICACIÓN PRINCIPAL
+# ========================================
+
+def main():
+    # Encabezado profesional
+    st.markdown("""
+    <div class="spain-header">
+        <h1>🇪🇸 Grecert DGT España</h1>
+        <p>Plataforma de Inteligencia de Transporte Verde y Energías Renovables</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Professional Footer
+    # Cargar datos
+    with st.spinner("🔄 Cargando datos de transporte verde de España..."):
+        df = generate_spain_green_dgt_data()
+    
+    # Panel de control ejecutivo
+    st.sidebar.markdown("## 🎛️ Centro de Control Verde")
+    st.sidebar.markdown("---")
+    
+    # Controles de fecha
+    min_date = df['fecha'].min().date()
+    max_date = df['fecha'].max().date()
+    
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        start_date = st.date_input("Fecha Inicio", min_date, min_value=min_date, max_value=max_date)
+    with col2:
+        end_date = st.date_input("Fecha Fin", max_date, min_value=min_date, max_value=max_date)
+    
+    # Filtros estratégicos
+    st.sidebar.markdown("### 🌍 Alcance Estratégico")
+    
+    all_regions = sorted(df['comunidad_autonoma'].unique())
+    
+    if st.session_state.selected_region:
+        st.sidebar.markdown(f"**Región Seleccionada:** **{st.session_state.selected_region}**")
+        if st.sidebar.button("⬅️ Volver a Vista España"):
+            st.session_state.selected_region = None
+            st.rerun()
+        selected_regions_filter = [st.session_state.selected_region]
+    else:
+        selected_regions_filter = st.sidebar.multiselect(
+            "Comunidades Autónomas",
+            options=all_regions,
+            default=all_regions
+        )
+        if not selected_regions_filter:
+            selected_regions_filter = all_regions
+            st.sidebar.warning("Seleccione al menos una comunidad.")
+    
+    selected_vehicles = st.sidebar.multiselect(
+        "Tipos de Vehículos",
+        options=df['tipo_vehiculo'].unique(),
+        default=df['tipo_vehiculo'].unique()
+    )
+    
+    selected_energy = st.sidebar.multiselect(
+        "Fuentes de Energía",
+        options=df['fuente_energia'].unique(),
+        default=df['fuente_energia'].unique()
+    )
+    
+    # Filtros verdes avanzados
+    st.sidebar.markdown("### ⚡ Filtros Energía Verde")
+    min_green_score = st.sidebar.slider("Puntuación Verde Mínima", 0.0, 1.0, 0.0, 0.1)
+    only_certified = st.sidebar.checkbox("Solo Vehículos Certificados Verde", value=False)
+    
+    # Aplicar filtros
+    mask = (df['fecha'] >= pd.to_datetime(start_date)) & (df['fecha'] <= pd.to_datetime(end_date))
+    filtered_df = df[mask]
+    
+    if selected_regions_filter:
+        filtered_df = filtered_df[filtered_df['comunidad_autonoma'].isin(selected_regions_filter)]
+    if selected_vehicles:
+        filtered_df = filtered_df[filtered_df['tipo_vehiculo'].isin(selected_vehicles)]
+    if selected_energy:
+        filtered_df = filtered_df[filtered_df['fuente_energia'].isin(selected_energy)]
+    
+    filtered_df = filtered_df[filtered_df['puntuacion_verde_total'] >= min_green_score]
+    
+    if only_certified:
+        filtered_df = filtered_df[filtered_df['certificacion_verde'] == 1]
+    
+    if filtered_df.empty:
+        st.error("⚠️ No hay datos que coincidan con los criterios seleccionados.")
+        return
+    
+    # Calcular rendimiento regional
+    all_regional_performance = filtered_df.groupby('comunidad_autonoma').agg({
+        'emisiones_co2_kg': 'sum',
+        'share_flota_ev': 'mean',
+        'puntuacion_verde_total': 'mean',
+        'progreso_objetivos_2030': 'mean',
+        'energia_renovable_kwh': 'sum',
+        'ahorro_verde_eur': 'sum',
+        'inversion_verde_eur': 'sum',
+        'distancia_km': 'sum',
+        'ingresos_eur': 'sum'
+    }).reset_index()
+    
+    # Renombrar columnas para consistencia
+    all_regional_performance.rename(columns={
+        'emisiones_co2_kg': 'emisiones_co2_total',
+        'energia_renovable_kwh': 'energia_renovable_total',
+        'ahorro_verde_eur': 'ahorro_verde_total',
+        'inversion_verde_eur': 'inversion_verde_total'
+    }, inplace=True)
+    
+    # Área de contenido principal
+    if st.session_state.selected_region:
+        # Mostrar dashboard detallado para la región seleccionada
+        region_df = filtered_df[filtered_df['comunidad_autonoma'] == st.session_state.selected_region]
+        display_regional_dashboard(st.session_state.selected_region, region_df, all_regional_performance)
+    else:
+        # Mostrar vista general de España
+        st.markdown("## 📊 Panorama General de Transporte Verde en España")
+        
+        # KPIs globales
+        total_operations = len(filtered_df)
+        total_distance_mkm = filtered_df['distancia_km'].sum() / 1_000_000
+        total_revenue_m = filtered_df['ingresos_eur'].sum() / 1_000_000
+        total_green_savings_m = filtered_df['ahorro_verde_eur'].sum() / 1_000_000
+        total_emissions_m = filtered_df['emisiones_co2_kg'].sum() / 1_000_000
+        avg_ev_share_spain = filtered_df['share_flota_ev'].mean() * 100
+        avg_green_score_spain = filtered_df['puntuacion_verde_total'].mean() * 100
+        avg_2030_progress_spain = filtered_df['progreso_objetivos_2030'].mean() * 100
+        
+        # Mostrar KPIs globales
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown(create_green_metric_card(
+                "Operaciones Totales", total_operations, delta="+15.2% anual", icon="🚛"
+            ), unsafe_allow_html=True)
+            
+            st.markdown(create_green_metric_card(
+                "Distancia Total", total_distance_mkm, delta=8.7, format_type="decimal", icon="🛣️"
+            ), unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(create_green_metric_card(
+                "Ingresos Totales", total_revenue_m, delta=12.5, format_type="currency", icon="💰"
+            ), unsafe_allow_html=True)
+            
+            st.markdown(create_green_metric_card(
+                "Ahorro Verde", total_green_savings_m, delta=28.3, format_type="currency", icon="💚"
+            ), unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(create_green_metric_card(
+                "Share Flota EV", avg_ev_share_spain, delta=22.1, format_type="percentage", icon="🔋"
+            ), unsafe_allow_html=True)
+            
+            st.markdown(create_green_metric_card(
+                "Emisiones CO₂", total_emissions_m, delta=-18.7, format_type="emissions", icon="🌿"
+            ), unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown(create_green_metric_card(
+                "Puntuación Verde", avg_green_score_spain, delta=11.2, format_type="percentage", icon="🌟"
+            ), unsafe_allow_html=True)
+            
+            st.markdown(create_green_metric_card(
+                "Progreso 2030", avg_2030_progress_spain, delta=15.8, format_type="percentage", icon="🎯"
+            ), unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Mapa interactivo de España
+        st.markdown("### 🗺️ Mapa Interactivo de Transporte Verde por Comunidades")
+        
+        col_map, col_select = st.columns([3, 1])
+        
+        with col_map:
+            # Crear mapa coroplético
+            fig_map = px.choropleth(
+                all_regional_performance,
+                geojson=SPAIN_GEOJSON,
+                locations='comunidad_autonoma',
+                featureidkey="properties.NAME_1",
+                color='puntuacion_verde_total',
+                hover_name='comunidad_autonoma',
+                hover_data={
+                    'share_flota_ev': ':.1%',
+                    'emisiones_co2_total': ':,.0f',
+                    'ahorro_verde_total': ':,.0f',
+                    'progreso_objetivos_2030': ':.1%'
+                },
+                color_continuous_scale="Greens",
+                title="🌱 Puntuación Verde por Comunidad Autónoma"
+            )
+            
+            fig_map.update_geos(
+                fitbounds="locations", 
+                visible=False
+            )
+            
+            fig_map.update_layout(
+                height=600,
+                margin={"r":0,"t":50,"l":0,"b":0},
+                coloraxis_colorbar=dict(title="Puntuación Verde"),
+                template='plotly_white',
+                font=dict(family='Inter')
+            )
+            
+            st.markdown('<div class="map-container">', unsafe_allow_html=True)
+            st.plotly_chart(fig_map, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col_select:
+            st.markdown("#### 🎯 Seleccionar Comunidad")
+            selected_region_for_detail = st.selectbox(
+                "Elige una Comunidad Autónoma:",
+                options=[''] + all_regions,
+                index=0,
+                key='map_region_selector'
+            )
+            
+            if selected_region_for_detail:
+                if st.button(f"Ver Dashboard {selected_region_for_detail}", key='view_dashboard'):
+                    st.session_state.selected_region = selected_region_for_detail
+                    st.rerun()
+            
+            # Top performers
+            st.markdown("#### 🏆 Líderes Verdes")
+            top_green = all_regional_performance.nlargest(3, 'puntuacion_verde_total')
+            
+            for i, (_, community) in enumerate(top_green.iterrows(), 1):
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉"
+                st.markdown(f"""
+                <div class="community-card">
+                    <h5>{medal} {community['comunidad_autonoma']}</h5>
+                    <p><strong>Puntuación:</strong> {community['puntuacion_verde_total']:.2f}</p>
+                    <p><strong>Share EV:</strong> {community['share_flota_ev']:.1%}</p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Análisis nacional
+        st.markdown("### 🇪🇸 Análisis Nacional de Transporte Verde")
+        
+        tab1, tab2, tab3 = st.tabs([
+            "📈 **Tendencias Nacionales**",
+            "🏆 **Ranking Comunidades**",
+            "🎯 **Objetivos 2030**"
+        ])
+        
+        with tab1:
+            st.markdown("### 📈 Tendencias Nacionales de Movilidad Verde")
+            
+            # Tendencias mensuales nacionales
+            monthly_national = filtered_df.groupby(pd.Grouper(key='fecha', freq='M')).agg({
+                'share_flota_ev': 'mean',
+                'emisiones_co2_kg': 'sum',
+                'energia_renovable_kwh': 'sum',
+                'ahorro_verde_eur': 'sum'
+            }).reset_index()
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig_ev_trend = px.line(
+                    monthly_national,
+                    x='fecha',
+                    y='share_flota_ev',
+                    title="🔋 Evolución Nacional Share Flota EV",
+                    color_discrete_sequence=['#10b981']
+                )
+                fig_ev_trend.update_layout(
+                    template='plotly_white',
+                    font=dict(family='Inter'),
+                    yaxis_title="Share Flota EV"
+                )
+                st.plotly_chart(fig_ev_trend, use_container_width=True)
+            
+            with col2:
+                fig_co2_trend = px.line(
+                    monthly_national,
+                    x='fecha',
+                    y='emisiones_co2_kg',
+                    title="🌿 Evolución Nacional Emisiones CO₂",
+                    color_discrete_sequence=['#ef4444']
+                )
+                fig_co2_trend.update_layout(
+                    template='plotly_white',
+                    font=dict(family='Inter'),
+                    yaxis_title="Emisiones CO₂ (kg)"
+                )
+                st.plotly_chart(fig_co2_trend, use_container_width=True)
+            
+            # Insights nacionales
+            ev_growth = ((monthly_national['share_flota_ev'].iloc[-1] / monthly_national['share_flota_ev'].iloc[0]) - 1) * 100
+            co2_reduction = ((monthly_national['emisiones_co2_kg'].iloc[0] / monthly_national['emisiones_co2_kg'].iloc[-1]) - 1) * 100
+            
+            st.markdown(f"""
+            <div class="green-insight-container">
+                <h4>🇪🇸 Tendencias Nacionales</h4>
+                <p><strong>Crecimiento Flota EV:</strong> {ev_growth:+.1f}% en el período analizado</p>
+                <p><strong>Reducción Emisiones CO₂:</strong> {co2_reduction:+.1f}% respecto al inicio del período</p>
+                <p><strong>Ahorro Verde Nacional:</strong> €{monthly_national['ahorro_verde_eur'].sum()/1000000:.1f}M acumulado</p>
+                <p><strong>Evaluación General:</strong> {'España lidera la transición hacia movilidad sostenible en Europa' if ev_growth > 20 else 'Progreso sólido que requiere acelerar políticas verdes' if ev_growth > 10 else 'Necesario reforzar urgentemente estrategias de electrificación'}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with tab2:
+            st.markdown("### 🏆 Ranking Nacional de Comunidades Verdes")
+            
+            # Crear ranking
+            ranking_data = all_regional_performance.copy()
+            ranking_data['ranking_verde'] = ranking_data['puntuacion_verde_total'].rank(ascending=False)
+            ranking_data = ranking_data.sort_values('puntuacion_verde_total', ascending=False)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🥇 Top 5 Comunidades Verdes")
+                for i, (_, community) in enumerate(ranking_data.head(5).iterrows(), 1):
+                    medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "🏅"
+                    st.markdown(f"""
+                    <div class="community-card">
+                        <h5>{medal} #{i} {community['comunidad_autonoma']}</h5>
+                        <p><strong>Puntuación Verde:</strong> {community['puntuacion_verde_total']:.3f}</p>
+                        <p><strong>Share Flota EV:</strong> {community['share_flota_ev']:.1%}</p>
+                        <p><strong>Progreso 2030:</strong> {community['progreso_objetivos_2030']:.1%}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with col2:
+                # Gráfico de ranking
+                fig_ranking = px.bar(
+                    ranking_data.head(10),
+                    x='puntuacion_verde_total',
+                    y='comunidad_autonoma',
+                    orientation='h',
+                    title="📊 Top 10 Puntuación Verde",
+                    color='puntuacion_verde_total',
+                    color_continuous_scale='Greens'
+                )
+                fig_ranking.update_layout(
+                    template='plotly_white',
+                    font=dict(family='Inter'),
+                    height=600
+                )
+                st.plotly_chart(fig_ranking, use_container_width=True)
+        
+        with tab3:
+            st.markdown("### 🎯 Progreso hacia Objetivos España 2030")
+            
+            # Calcular estado actual vs objetivos 2030
+            current_ev_pct = (filtered_df['tipo_vehiculo'].str.contains('Eléctrico|Híbrido', na=False)).mean() * 100
+            current_renewable_pct = (filtered_df['fuente_energia'] != 'Convencional').mean() * 100
+            current_green_investment = filtered_df['inversion_verde_eur'].sum() / 1_000_000
+            
+            # Objetivos 2030
+            target_ev = 50  # 50% vehículos eléctricos/híbridos
+            target_renewable = 85  # 85% energías renovables
+            target_co2_reduction = 55  # 55% reducción CO₂
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Gráfico de progreso
+                progress_data = pd.DataFrame({
+                    'Objetivo': ['Vehículos EV/Híbridos', 'Energías Renovables', 'Reducción CO₂'],
+                    'Meta 2030': [target_ev, target_renewable, target_co2_reduction],
+                    'Progreso Actual': [current_ev_pct, current_renewable_pct, co2_reduction],
+                    'Cumplimiento': [
+                        current_ev_pct / target_ev * 100,
+                        current_renewable_pct / target_renewable * 100,
+                        co2_reduction / target_co2_reduction * 100
+                    ]
+                })
+                
+                fig_progress = px.bar(
+                    progress_data,
+                    x='Objetivo',
+                    y=['Meta 2030', 'Progreso Actual'],
+                    title="🎯 Progreso hacia Objetivos 2030",
+                    barmode='group',
+                    color_discrete_sequence=['#a7f3d0', '#10b981']
+                )
+                fig_progress.update_layout(
+                    template='plotly_white',
+                    font=dict(family='Inter')
+                )
+                st.plotly_chart(fig_progress, use_container_width=True)
+            
+            with col2:
+                # Indicador de cumplimiento
+                avg_compliance = progress_data['Cumplimiento'].mean()
+                
+                fig_gauge = go.Figure(go.Indicator(
+                    mode = "gauge+number+delta",
+                    value = avg_compliance,
+                    domain = {'x': [0, 1], 'y': [0, 1]},
+                    title = {'text': "📊 Cumplimiento Global 2030"},
+                    delta = {'reference': 100},
+                    gauge = {
+                        'axis': {'range': [None, 100]},
+                        'bar': {'color': "#10b981"},
+                        'steps': [
+                            {'range': [0, 50], 'color': "#fef2f2"},
+                            {'range': [50, 80], 'color': "#fffbeb"},
+                            {'range': [80, 100], 'color': "#ecfdf5"}
+                        ],
+                        'threshold': {
+                            'line': {'color': "red", 'width': 4},
+                            'thickness': 0.75,
+                            'value': 90
+                        }
+                    }
+                ))
+                fig_gauge.update_layout(
+                    template='plotly_white',
+                    font=dict(family='Inter')
+                )
+                st.plotly_chart(fig_gauge, use_container_width=True)
+            
+            # Evaluación de cumplimiento
+            if avg_compliance < 60:
+                urgency = "CRÍTICA"
+                color = "danger"
+                action = "Requiere medidas extraordinarias e inversión masiva en movilidad verde"
+            elif avg_compliance < 80:
+                urgency = "ALTA"
+                color = "warning"
+                action = "Acelerar significativamente las iniciativas de transporte sostenible"
+            else:
+                urgency = "MODERADA"
+                color = "success"
+                action = "Mantener ritmo actual con optimizaciones específicas"
+            
+            st.markdown(f"""
+            <div class="alert-{color}">
+                <h4>🚨 Estado Objetivos 2030 - Prioridad {urgency}</h4>
+                <p><strong>Cumplimiento Global:</strong> {avg_compliance:.1f}% de los objetivos</p>
+                <p><strong>Vehículos EV/Híbridos:</strong> {current_ev_pct:.1f}% actual vs {target_ev}% objetivo</p>
+                <p><strong>Energías Renovables:</strong> {current_renewable_pct:.1f}% actual vs {target_renewable}% objetivo</p>
+                <p><strong>Acción Requerida:</strong> {action}</p>
+                <p><strong>Inversión Verde Actual:</strong> €{current_green_investment:.1f}M (requiere duplicar para 2030)</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Resumen ejecutivo
+    st.markdown("---")
+    st.markdown(f"""
+    <div class="green-insight-container">
+        <h4>📋 Resumen Ejecutivo - Transporte Verde España</h4>
+        <p><strong>Período de Análisis:</strong> {start_date} a {end_date} | <strong>Alcance:</strong> {len(filtered_df):,} operaciones en {len(selected_regions_filter if not st.session_state.selected_region else [st.session_state.selected_region])} comunidades</p>
+        <p><strong>Rendimiento Verde Nacional:</strong> {avg_green_score_spain:.1f}% puntuación sostenibilidad | {avg_ev_share_spain:.1f}% share flota EV</p>
+        <p><strong>Impacto Ambiental:</strong> {total_emissions_m:.1f}M kg CO₂ | €{total_green_savings_m:.1f}M ahorros verdes acumulados</p>
+        <p><strong>Progreso Estratégico:</strong> {avg_2030_progress_spain:.1f}% avance hacia objetivos 2030 | Liderazgo europeo en movilidad sostenible</p>
+        <p><strong>Oportunidades Identificadas:</strong> Potencial €{(total_green_savings_m * 3.5):.1f}M adicionales con electrificación completa del transporte</p>
+        <p><strong>Próximas Acciones:</strong> {'Acelerar despliegue infraestructura carga rápida y políticas incentivos' if avg_ev_share_spain < 60 else 'Optimizar redes inteligentes y explorar hidrógeno verde' if avg_ev_share_spain < 80 else 'Liderar innovación en movilidad autónoma sostenible'}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Footer profesional
     st.markdown("---")
     st.markdown("""
-    <div style='background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2.5rem; border-radius: 15px; text-align: center; margin-top: 2rem;'>
-        <h3 style='margin: 0; color: white; font-size: 1.8rem;'>🚀 Grecert DGT Transport Intelligence Platform</h3>
-        <p style='margin: 1rem 0; font-size: 1.1rem; opacity: 0.9;'>Executive Business Intelligence | Advanced AI Analytics | Strategic Decision Support</p>
-        <p style='margin: 0; font-size: 0.9rem; opacity: 0.8;'>© 2025 Grecert.com - Confidential Executive Dashboard | All Rights Reserved</p>
+    <div style='background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 3rem; border-radius: 20px; text-align: center; margin-top: 2rem;'>
+        <h3 style='margin: 0; color: white; font-size: 2rem;'>🌱 Grecert DGT España - Transporte Verde</h3>
+        <p style='margin: 1.5rem 0; font-size: 1.2rem; opacity: 0.95;'>Plataforma de Inteligencia Ejecutiva | Movilidad Sostenible | Futuro Verde</p>
+        <p style='margin: 0; font-size: 1rem; opacity: 0.85;'>© 2025 Grecert.com - Liderando la Revolución del Transporte Sostenible en España | Todos los Derechos Reservados</p>
     </div>
     """, unsafe_allow_html=True)
 
