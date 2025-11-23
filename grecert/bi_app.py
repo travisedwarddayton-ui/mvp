@@ -248,11 +248,6 @@ def load_professional_css():
             box-shadow: 0 4px 15px rgba(0,123,255,0.3);
         }
         
-        /* Sidebar Styling */
-        .css-1d391kg {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-        }
-        
         /* Ensure all text is readable */
         .stMarkdown p,
         .stMarkdown li,
@@ -296,7 +291,7 @@ load_professional_css()
 # ========================================
 
 @st.cache_data(ttl=3600)
-def generate_executive_dgt_data(num_records=80000):
+def generate_executive_dgt_data(num_records=65000):
     """Generate comprehensive, realistic DGT Transport data for executive analysis."""
     np.random.seed(42)
     
@@ -933,6 +928,8 @@ def main():
                 <p><strong>Executive Action:</strong> {'Schedule board presentation for growth investment approval' if growth_rate > 15 else 'Continue quarterly monitoring with operational adjustments' if growth_rate > -5 else 'Initiate emergency strategic review and cost reduction program'}</p>
             </div>
             """, unsafe_allow_html=True)
+        else:
+            st.info("Insufficient historical data for reliable forecasting. Please expand the date range or adjust filters.")
     
     with tab2:
         st.markdown("### 🗺️ Regional Performance Intelligence & Market Analysis")
@@ -1014,43 +1011,44 @@ def main():
         # Regional champions analysis
         st.markdown("#### 🏆 Regional Performance Champions")
         
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            revenue_leader = regional_performance.loc[regional_performance['revenue_eur'].idxmax()]
-            st.markdown(f"""
-            **💰 Revenue Champion**
-            - **{revenue_leader['region']}**
-            - €{revenue_leader['revenue_eur']/1000000:.1f}M revenue
-            - {revenue_leader['market_share']:.1f}% market share
-            """)
-        
-        with col2:
-            profit_leader = regional_performance.loc[regional_performance['profit_margin'].idxmax()]
-            st.markdown(f"""
-            **📈 Profitability Leader**
-            - **{profit_leader['region']}**
-            - {profit_leader['profit_margin']:.1%} margin
-            - €{profit_leader['profit_eur']/1000000:.1f}M profit
-            """)
-        
-        with col3:
-            efficiency_leader = regional_performance.loc[regional_performance['fuel_efficiency_km_per_l'].idxmax()]
-            st.markdown(f"""
-            **⚡ Efficiency Champion**
-            - **{efficiency_leader['region']}**
-            - {efficiency_leader['fuel_efficiency_km_per_l']:.1f} km/L
-            - Best-in-class operations
-            """)
-        
-        with col4:
-            green_leader = regional_performance.loc[regional_performance['emissions_intensity'].idxmin()]
-            st.markdown(f"""
-            **🌱 Sustainability Leader**
-            - **{green_leader['region']}**
-            - {green_leader['emissions_intensity']:.2f} kg CO₂/km
-            - Environmental excellence
-            """)
+        if not regional_performance.empty:
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                revenue_leader = regional_performance.loc[regional_performance['revenue_eur'].idxmax()]
+                st.markdown(f"""
+                **💰 Revenue Champion**
+                - **{revenue_leader['region']}**
+                - €{revenue_leader['revenue_eur']/1000000:.1f}M revenue
+                - {revenue_leader['market_share']:.1f}% market share
+                """)
+            
+            with col2:
+                profit_leader = regional_performance.loc[regional_performance['profit_margin'].idxmax()]
+                st.markdown(f"""
+                **📈 Profitability Leader**
+                - **{profit_leader['region']}**
+                - {profit_leader['profit_margin']:.1%} margin
+                - €{profit_leader['profit_eur']/1000000:.1f}M profit
+                """)
+            
+            with col3:
+                efficiency_leader = regional_performance.loc[regional_performance['fuel_efficiency_km_per_l'].idxmax()]
+                st.markdown(f"""
+                **⚡ Efficiency Champion**
+                - **{efficiency_leader['region']}**
+                - {efficiency_leader['fuel_efficiency_km_per_l']:.1f} km/L
+                - Best-in-class operations
+                """)
+            
+            with col4:
+                green_leader = regional_performance.loc[regional_performance['emissions_intensity'].idxmin()]
+                st.markdown(f"""
+                **🌱 Sustainability Leader**
+                - **{green_leader['region']}**
+                - {green_leader['emissions_intensity']:.2f} kg CO₂/km
+                - Environmental excellence
+                """)
     
     with tab3:
         st.markdown("### 🤖 AI-Powered Strategic Insights & Performance Clustering")
@@ -1067,7 +1065,7 @@ def main():
         
         if clustering_model is not None and not regional_clusters.empty:
             with col1:
-                # 3D strategic clustering visualization
+                # FIXED: 3D strategic clustering visualization with correct discrete color handling
                 fig_3d = px.scatter_3d(
                     regional_clusters,
                     x='fuel_efficiency_km_per_l',
@@ -1082,7 +1080,7 @@ def main():
                         'on_time_performance': 'Service Quality',
                         'profit_margin': 'Financial Performance'
                     },
-                    color_continuous_scale='Set3'
+                    color_discrete_sequence=px.colors.qualitative.Set3  # CORRECTED LINE
                 )
                 fig_3d.update_layout(
                     template='plotly_white',
@@ -1383,7 +1381,7 @@ def main():
         recommendations = []
         
         # Sustainability recommendations
-        if total_emission_reduction > baseline_emissions * 0.20:
+        if baseline_emissions > 0 and total_emission_reduction > baseline_emissions * 0.20:
             recommendations.append({
                 "priority": "High",
                 "category": "Sustainability Leadership",
@@ -1416,15 +1414,16 @@ def main():
             })
         
         # Operational excellence recommendations
-        best_performing_region = regional_performance.loc[regional_performance['profit_margin'].idxmax(), 'region']
-        recommendations.append({
-            "priority": "Medium",
-            "category": "Operational Excellence",
-            "title": "Scale Best Practice Framework",
-            "description": f"Replicate {best_performing_region}'s operational model across network. Current margin: {regional_performance.loc[regional_performance['profit_margin'].idxmax(), 'profit_margin']:.1%}",
-            "financial_impact": "Estimated €3-8M improvement potential",
-            "timeline": "9-15 months rollout"
-        })
+        if not regional_performance.empty:
+            best_performing_region = regional_performance.loc[regional_performance['profit_margin'].idxmax(), 'region']
+            recommendations.append({
+                "priority": "Medium",
+                "category": "Operational Excellence",
+                "title": "Scale Best Practice Framework",
+                "description": f"Replicate {best_performing_region}'s operational model across network. Current margin: {regional_performance.loc[regional_performance['profit_margin'].idxmax(), 'profit_margin']:.1%}",
+                "financial_impact": "Estimated €3-8M improvement potential",
+                "timeline": "9-15 months rollout"
+            })
         
         # Display strategic recommendations
         for i, rec in enumerate(recommendations, 1):
