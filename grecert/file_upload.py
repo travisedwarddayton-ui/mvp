@@ -2,95 +2,76 @@ import streamlit as st
 import zipfile
 import tempfile
 import os
-import fitz  # PyMuPDF
 import re
+import pymupdf as fitz
 import snowflake.connector
+from cryptography.hazmat.primitives import serialization
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# =============================
-#  PDF PROCESSOR (same as yours)
-# =============================
-def add_continuation_headers(input_pdf, output_pdf):
-    doc = fitz.open(input_pdf)
-    modifications_made = 0
+# Hardcoded for testing — replace with st.secrets in prod
+SNOWFLAKE_USER="STREAMLIT_USER"
+SNOWFLAKE_ACCOUNT="UILIVGK-NR22639"
+SNOWFLAKE_WAREHOUSE="STREAMLIT_WH"
+SNOWFLAKE_ROLE="STREAMLIT_ROLE"
+SNOWFLAKE_DATABASE="GRECERT_DB"
+SNOWFLAKE_SCHEMA="PUBLIC"
 
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-        text = page.get_text()
-        blocks = page.get_text("dict")["blocks"]
+PRIVATE_KEY_PEM = b"""-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC0EChas/P4r5iK
+TUwMsxw1NKBdXCimfKnm5us87IUAa1phlG8tDM/P5B1t0svQTn/8iApDwWdeXAAT
+OxBZl9Qy+zPEdDhYAsCwRG1ZZioEsreGLn1LSaA1yyB4fU5KfjtyHl0xBb04WiNE
+W2ZLfklUQ0T3sVtlvE3QUwPMZ2cs6O58owA2qbbg8PF7pu7xUszcWisqv6GlvZv2
+5VldmeMRKkpwchignSBArMinvYZLCRfJi/raLSwY6HRKn3HQN4pVkTxUDS7izp/g
+/HBbGnLuSpUf/iVP4+4D6Zyq00BeZe4KU+CIphs92TMRV4Nva7AbKLwY0yUKviBQ
+WisuL6DDAgMBAAECggEAJBezBw9YIWqNMHey/T6vskiEtoIBEfIeGk8CKxmbxUw/
+dxzKNiUByMGIVpmwyeXaSLO6Hv+26RaW20P1EIha/AcXRtMm8hlHJ23n30oXtQ5f
+tBFAgyVUbEP1k8FGPq9T2hmVA30Lgy6qMAsEE7DSIQZE3kNaNyfKDy58re2yJDGL
+Rh5WEzT2ZtHZ5gWzKmZlgXpqvAHlIMYs5blg2argGTqU53Gwy1lbqb01nosIpsa0
+UnCZJkZumQHJNfkS1UvkVJ4WevX7Osb+KarihbA0aur3gzHECmCr9xRpS0h1T8J3
+x6TveoXyH4um37x6igISqlSZ//rq+dG899MEoxxxkQKBgQD9+qhTEhK3qfcMGf45
+0VRAB5NZ2OKZNgPdoIrPM7Efg2x0xHlI5lUR7KMhYHlSx0h11d0d0DgO+mDMBdzb
+K0MnuPMwvtWht2oLdPMSYsKePjNbiSpc+CE94u6+fChqzt0zCJozX0LuiPfEADzL
+ti9jZmyMJ1SbEi13kHbOFngLEQKBgQC1fu/d3H6RJwy/AMErr6WIPocvq79ysJMd
+ldlTPJzunpNM2SR9Cmbxl38vuetS5z1rjJhBh5VQk+MUXJuE+LfTIi2FfLZEM9sf
+4e0qKSBHcs3f6dbi5FmsAxQY4BuHmI+q1uqZDRo9Nnpk73Y0/Z2bpwowpy36Sxnb
+TKXheFDmkwKBgQCv2hssEWp2Uq+kaGb3H3JHNzeWUS5sSNMaZCtYVgFAwZ2Zp+QW
+Tqz+USuOU58NasBIHoEQQHhgHophGXoXInhIC64OxUNjynwZXKtkwo7gRE8JBQsY
+/hD+KZ+Gsq7FbWAJEt65zS6pvJpY0pVFs2pSV7u2uxDAojBrBdLM1Q/fEQKBgFUg
+o7spF4hXi4fu/6vQ59A+m8PFR7ewkGA5D8UV0fmuESLjWlT30w8P4szs5C5vXYSb
+XjKmOGeh5cmAIkW9LuNtzXIl64uT0vxiSI4U2hoJA/05PdwQBOtESmHcg60W5pPX
+2BNPbPY3HjNHiecS6aC/OW1WjJ8wKIGOsuNNPozXAoGBANC8fCa+xgIvMOo2Nozx
+JclHGgUy2UHyckWk+tGyq0f3HhHwROgyvCIpPlEtfNLdqt/1R4PHJmPVN/BFkzwi
+DPl1W57Dm5MXiAu89YIYKGeX+zXLYzR8vAVwESmTr5cSglq4WHy3QdAo+RAqerUv
+0Lyt2WbT0pvwIU1Tvw2ia6JI
+-----END PRIVATE KEY-----
+"""
 
-        # === ITV TABLE ===
-        has_itv_data = bool(re.search(
-            r'\d{2}/\d{2}/\d{4}\s+\d{2}/\d{2}/\d{4}\s+\d+\s+(FAVORABLE|DESFAVORABLE)',
-            text
-        ))
-        has_historial_header = "HISTORIAL DE INSPECCIONES" in text
-
-        if has_itv_data and not has_historial_header:
-            fecha_itv_y = None
-            for block in blocks:
-                if "lines" in block:
-                    for line in block["lines"]:
-                        for span in line["spans"]:
-                            if "Fecha ITV" in span["text"]:
-                                fecha_itv_y = block["bbox"][1]
-                                break
-
-            if fecha_itv_y:
-                page.insert_text(
-                    (40, fecha_itv_y - 15),
-                    "HISTORIAL DE INSPECCIONES TECNICAS (Continuacion)",
-                    fontsize=10,
-                    fontname="helv"
-                )
-                modifications_made += 1
-
-        # === ODOMETER TABLE ===
-        has_odometer_data = bool(re.search(
-            r'\d{2}/\d{2}/\d{4}\s+[\d.]+\s+Estaci[oó]n\s+ITV',
-            text
-        ))
-        has_odometer_header = "HISTORIAL DE LECTURAS" in text or "CUENTAKILOMETROS" in text
-
-        if has_odometer_data and not has_odometer_header:
-            fecha_lectura_y = None
-            for block in blocks:
-                if "lines" in block:
-                    for line in block["lines"]:
-                        for span in line["spans"]:
-                            if "Fecha de Lectura" in span["text"]:
-                                fecha_lectura_y = block["bbox"][1]
-                                break
-
-            if fecha_lectura_y:
-                page.insert_text(
-                    (40, fecha_lectura_y - 15),
-                    "HISTORIAL DE LECTURAS DEL CUENTAKILOMETROS (Continuacion)",
-                    fontsize=10,
-                    fontname="helv"
-                )
-                modifications_made += 1
-
-    doc.save(output_pdf)
-    doc.close()
-    return modifications_made
-
-
-# =============================
-# SNOWFLAKE UPLOAD
-# =============================
+def load_private_key_pkcs8():
+    # Convert the PKCS1 private key → PKCS8 (required by Snowflake)
+    key = serialization.load_pem_private_key(
+        PRIVATE_KEY_PEM,
+        password=None,
+    )
+    pkcs8_key = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return pkcs8_key
 
 def upload_to_snowflake_stage(local_path, stage_path):
+    private_key = load_private_key_pkcs8()
+
     conn = snowflake.connector.connect(
-        user="STREAMLIT_USER",
-        password="StrongPasswordHere123!",
-        account="UILIVGK-NR22639",
-        warehouse="GRECERT_WH",
-        role="STREAMLIT_ROLE",
-        database="GRECERT_DB",
-        schema="PUBLIC"
+        user=SNOWFLAKE_USER,
+        account=SNOWFLAKE_ACCOUNT,
+        warehouse=SNOWFLAKE_WAREHOUSE,
+        role=SNOWFLAKE_ROLE,
+        database=SNOWFLAKE_DATABASE,
+        schema=SNOWFLAKE_SCHEMA,
+        private_key=private_key
     )
 
     cs = conn.cursor()
@@ -99,48 +80,3 @@ def upload_to_snowflake_stage(local_path, stage_path):
     finally:
         cs.close()
         conn.close()
-
-
-# =============================
-# STREAMLIT UI
-# =============================
-st.title("📄 PDF Processor + Snowflake Uploader")
-
-uploaded_zip = st.file_uploader("Upload ZIP of PDFs", type="zip")
-
-if uploaded_zip:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        zip_path = os.path.join(temp_dir, "input.zip")
-
-        # Save ZIP temporarily
-        with open(zip_path, "wb") as f:
-            f.write(uploaded_zip.read())
-
-        # Extract ZIP
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(temp_dir)
-
-        st.write("### Extracted files:")
-        pdf_files = [f for f in os.listdir(temp_dir) if f.lower().endswith(".pdf")]
-        st.write(pdf_files)
-
-        results = []
-
-        for pdf_name in pdf_files:
-            original_path = os.path.join(temp_dir, pdf_name)
-            processed_path = os.path.join(temp_dir, f"processed_{pdf_name}")
-
-            modifications = add_continuation_headers(original_path, processed_path)
-
-            # Upload to Snowflake stage
-            upload_to_snowflake_stage(
-                processed_path,
-                stage_path="GRECERT_STAGE/ingest"  # <-- Change to your internal stage
-            )
-
-            results.append((pdf_name, modifications))
-
-        st.success("Processing complete!")
-        st.write("### Results:")
-        for pdf, mods in results:
-            st.write(f"{pdf}: {mods} modifications")
