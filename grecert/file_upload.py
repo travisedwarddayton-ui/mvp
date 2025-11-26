@@ -135,7 +135,7 @@ if uploaded_zip:
             # Upload to Snowflake stage
             upload_to_snowflake_stage(
                 processed_path,
-                stage_path="GRECERT_STAGE"  # <-- Change to your internal stage
+                stage_path="GRECERT_STAGE/ingest"  # <-- Change to your internal stage
             )
 
             results.append((pdf_name, modifications))
