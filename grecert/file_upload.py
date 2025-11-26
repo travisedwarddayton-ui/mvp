@@ -4,7 +4,7 @@ import tempfile
 import os
 import fitz  # PyMuPDF
 import re
-from snowflake.connector import connect
+import snowflake.connector
 from dotenv import load_dotenv
 
 load_dotenv()
