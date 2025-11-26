@@ -1,19 +1,17 @@
-#!/usr/bin/env python3
-"""
-ZIP ingestion → DGT PDF continuation repair → Upload to Snowflake stage
-"""
-
-import fitz
-import sys
-import re
-import os
+import streamlit as st
 import zipfile
-import snowflake.connector
+import tempfile
+import os
+import fitz  # PyMuPDF
+import re
+from snowflake.connector import connect
+from dotenv import load_dotenv
 
+load_dotenv()
 
-##############################
-# 1. Continuation Header Logic
-##############################
+# =============================
+#  PDF PROCESSOR (same as yours)
+# =============================
 def add_continuation_headers(input_pdf, output_pdf):
     doc = fitz.open(input_pdf)
     modifications_made = 0
@@ -23,7 +21,7 @@ def add_continuation_headers(input_pdf, output_pdf):
         text = page.get_text()
         blocks = page.get_text("dict")["blocks"]
 
-        # === TABLE 1: ITV INSPECTIONS ===
+        # === ITV TABLE ===
         has_itv_data = bool(re.search(
             r'\d{2}/\d{2}/\d{4}\s+\d{2}/\d{2}/\d{4}\s+\d+\s+(FAVORABLE|DESFAVORABLE)',
             text
@@ -41,16 +39,15 @@ def add_continuation_headers(input_pdf, output_pdf):
                                 break
 
             if fecha_itv_y:
-                section_y = fecha_itv_y - 15
                 page.insert_text(
-                    (40, section_y),
+                    (40, fecha_itv_y - 15),
                     "HISTORIAL DE INSPECCIONES TECNICAS (Continuacion)",
                     fontsize=10,
                     fontname="helv"
                 )
                 modifications_made += 1
 
-        # === TABLE 2: ODOMETER READINGS ===
+        # === ODOMETER TABLE ===
         has_odometer_data = bool(re.search(
             r'\d{2}/\d{2}/\d{4}\s+[\d.]+\s+Estaci[oó]n\s+ITV',
             text
@@ -68,94 +65,24 @@ def add_continuation_headers(input_pdf, output_pdf):
                                 break
 
             if fecha_lectura_y:
-                section_y = fecha_lectura_y - 15
                 page.insert_text(
-                    (40, section_y),
+                    (40, fecha_lectura_y - 15),
                     "HISTORIAL DE LECTURAS DEL CUENTAKILOMETROS (Continuacion)",
                     fontsize=10,
                     fontname="helv"
                 )
                 modifications_made += 1
-            else:
-                # fallback
-                dates = list(re.finditer(r'\d{2}/\d{2}/\d{4}', text))
-                if dates:
-                    first_date_rect = page.search_for(dates[0].group())
-                    if first_date_rect:
-                        section_y = first_date_rect[0].y0 - 50
-                        page.insert_text(
-                            (40, section_y),
-                            "HISTORIAL DE LECTURAS DEL CUENTAKILOMETROS (Continuacion)",
-                            fontsize=10,
-                            fontname="helv"
-                        )
-
-                        y_position = first_date_rect[0].y0 - 25
-                        headers = [
-                            (60, y_position, "Fecha de Lectura"),
-                            (240, y_position, "Lectura"),
-                            (500, y_position, "Responsable de Lectura")
-                        ]
-
-                        for x, y, label in headers:
-                            page.insert_text((x, y), label, fontsize=8, fontname="helv")
-
-                        page.draw_line((60, y_position + 5), (780, y_position + 5), width=1)
-                        modifications_made += 1
 
     doc.save(output_pdf)
     doc.close()
     return modifications_made
 
 
-##############################
-# 2. Upload file to Snowflake
-##############################
-def upload_to_snowflake_stage(local_path, stage_name, conn):
-    file_name = os.path.basename(local_path)
-    put_cmd = f"""
-        PUT file://{local_path} @{stage_name}
-        AUTO_COMPRESS=FALSE
-        OVERWRITE=TRUE;
-    """
-    print(f"Uploading {file_name} → {stage_name}")
-    conn.cursor().execute(put_cmd)
+# =============================
+# SNOWFLAKE UPLOAD
+# =============================
 
-
-##############################
-# 3. Main ZIP Processing
-##############################
-if __name__ == "__main__":
-
-    if len(sys.argv) != 2:
-        print("Usage: python process_zip.py input.zip")
-        sys.exit(1)
-
-    zip_file_path = sys.argv[1]
-    stage_name = "GRECERT_DB.PUBLIC.GRECERT_STAGE/ingest"
-
-    extract_dir = "./zip_extract/"
-    output_dir = "./pdf_processed/"
-    os.makedirs(extract_dir, exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
-
-    print("\n=== Extracting ZIP ===")
-    with zipfile.ZipFile(zip_file_path, 'r') as z:
-        z.extractall(extract_dir)
-
-    pdf_files = [
-        os.path.join(extract_dir, f)
-        for f in os.listdir(extract_dir)
-        if f.lower().endswith(".pdf")
-    ]
-
-    if not pdf_files:
-        print("No PDFs found in ZIP.")
-        sys.exit(0)
-
-    print(f"Found {len(pdf_files)} PDFs\n")
-
-    # ---- Snowflake connection ----
+def upload_to_snowflake_stage(local_path, stage_path):
     conn = snowflake.connector.connect(
         user="STREAMLIT_USER",
         password="YOUR_PASSWORD",
@@ -166,27 +93,54 @@ if __name__ == "__main__":
         schema="PUBLIC"
     )
 
-    total_modified = 0
+    cs = conn.cursor()
+    try:
+        cs.execute(f"PUT file://{local_path} @{stage_path} AUTO_COMPRESS=FALSE")
+    finally:
+        cs.close()
+        conn.close()
 
-    for pdf_path in pdf_files:
-        pdf_name = os.path.basename(pdf_path)
-        output_pdf = os.path.join(output_dir, pdf_name)
 
-        print(f"\n--- Processing {pdf_name} ---")
-        modified = add_continuation_headers(pdf_path, output_pdf)
-        total_modified += modified
+# =============================
+# STREAMLIT UI
+# =============================
+st.title("📄 PDF Processor + Snowflake Uploader")
 
-        if modified > 0:
-            print(f"✓ Added {modified} continuation header(s)")
-        else:
-            print("✓ No header added")
+uploaded_zip = st.file_uploader("Upload ZIP of PDFs", type="zip")
 
-        # Upload processed file
-        upload_to_snowflake_stage(output_pdf, stage_name, conn)
+if uploaded_zip:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        zip_path = os.path.join(temp_dir, "input.zip")
 
-    conn.close()
+        # Save ZIP temporarily
+        with open(zip_path, "wb") as f:
+            f.write(uploaded_zip.read())
 
-    print("\n===============================================")
-    print(f"Complete! Total continuation headers added: {total_modified}")
-    print(f"Uploaded PDFs saved to stage: @{stage_name}")
-    print("===============================================")
+        # Extract ZIP
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(temp_dir)
+
+        st.write("### Extracted files:")
+        pdf_files = [f for f in os.listdir(temp_dir) if f.lower().endswith(".pdf")]
+        st.write(pdf_files)
+
+        results = []
+
+        for pdf_name in pdf_files:
+            original_path = os.path.join(temp_dir, pdf_name)
+            processed_path = os.path.join(temp_dir, f"processed_{pdf_name}")
+
+            modifications = add_continuation_headers(original_path, processed_path)
+
+            # Upload to Snowflake stage
+            upload_to_snowflake_stage(
+                processed_path,
+                stage_path="GRECERT_STAGE"  # <-- Change to your internal stage
+            )
+
+            results.append((pdf_name, modifications))
+
+        st.success("Processing complete!")
+        st.write("### Results:")
+        for pdf, mods in results:
+            st.write(f"{pdf}: {mods} modifications")
