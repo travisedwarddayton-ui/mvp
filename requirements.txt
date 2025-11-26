@@ -15,3 +15,6 @@ plotly
 seaborn
 matplotlib
 scikit-learn
+pymupdf
+snowflake-connector-python
+python-dotenv
