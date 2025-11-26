@@ -85,7 +85,7 @@ def add_continuation_headers(input_pdf, output_pdf):
 def upload_to_snowflake_stage(local_path, stage_path):
     conn = snowflake.connector.connect(
         user="STREAMLIT_USER",
-        password="YOUR_PASSWORD",
+        password="StrongPasswordHere123!",
         account="UILIVGK-NR22639",
         warehouse="GRECERT_WH",
         role="STREAMLIT_ROLE",
